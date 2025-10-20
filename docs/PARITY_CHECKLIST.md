@@ -39,7 +39,8 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Moderations (basic create)
 - [x] Files (list/retrieve/create/delete/content; advanced upload helpers pending)
 - [x] Images (generate/edit/variation basic support; streaming events pending)
-- [ ] Audio (speech, transcription, translation)
+- [x] Audio transcriptions (create)
+- [ ] Audio speech & translation endpoints
 - [ ] Batches
 - [ ] Vector stores + assistants
 - [ ] Fine-tuning

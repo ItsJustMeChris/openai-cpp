@@ -19,6 +19,7 @@ add_executable(openai-cpp-tests
     ${CMAKE_CURRENT_LIST_DIR}/streaming_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/chat_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/images_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/audio_test.cpp
 )
 
 target_link_libraries(openai-cpp-tests PRIVATE

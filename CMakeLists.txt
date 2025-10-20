@@ -18,6 +18,7 @@ add_library(openai-cpp
     src/responses.cpp
     src/files.cpp
     src/images.cpp
+    src/audio.cpp
     src/streaming.cpp
 )
 

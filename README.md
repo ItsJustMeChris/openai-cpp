@@ -16,6 +16,7 @@ This repository houses an in-progress native C++ port of the official `openai-no
 - ✅ `FilesResource` (list/retrieve/create/delete/content for basic uploads)
 - ✅ `ChatResource` streaming helper (`client.chat().completions().create_stream`)
 - ✅ `ImagesResource` (generate/edit/variation metadata; streaming events pending)
+- ✅ `AudioResource` transcriptions (multipart upload)
 - 🚧 Additional endpoints (Chat, Responses, Files, etc.) to be implemented
 - 🚧 Streaming helpers, pagination helpers, and beta resources still pending
 
