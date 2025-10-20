@@ -23,6 +23,8 @@ struct RequestOptions {
   std::map<std::string, std::string> query_params;
   std::optional<std::string> idempotency_key;
   std::optional<std::chrono::milliseconds> timeout;
+  std::function<void(const char*, std::size_t)> on_chunk;
+  bool collect_body = true;
 };
 
 struct PageRequestOptions {

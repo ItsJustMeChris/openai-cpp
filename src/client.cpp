@@ -326,6 +326,8 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
   http_request.timeout = options.timeout.value_or(options_.timeout);
 
   http_request.headers.clear();
+  http_request.on_chunk = options.on_chunk;
+  http_request.collect_body = options.collect_body;
   // The API expects JSON by default.
   if (!body.empty()) {
     http_request.headers["Content-Type"] = "application/json";

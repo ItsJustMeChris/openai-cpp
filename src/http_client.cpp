@@ -15,10 +15,29 @@
 namespace openai {
 namespace {
 
+struct WriteContext {
+  std::string* body;
+  std::function<void(const char*, std::size_t)>* on_chunk;
+  bool error = false;
+  std::string error_message;
+};
+
 size_t write_callback(char* ptr, size_t size, size_t nmemb, void* userdata) {
-  auto* body = static_cast<std::string*>(userdata);
-  body->append(ptr, size * nmemb);
-  return size * nmemb;
+  auto* context = static_cast<WriteContext*>(userdata);
+  const size_t total = size * nmemb;
+  if (context->on_chunk && *context->on_chunk) {
+    try {
+      (*context->on_chunk)(ptr, total);
+    } catch (const std::exception& ex) {
+      context->error = true;
+      context->error_message = ex.what();
+      return 0;
+    }
+  }
+  if (context->body) {
+    context->body->append(ptr, total);
+  }
+  return total;
 }
 
 size_t header_callback(char* buffer, size_t size, size_t nitems, void* userdata) {
@@ -69,8 +88,14 @@ public:
     curl_easy_setopt(curl, CURLOPT_URL, request.url.c_str());
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request.method.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_body);
+  std::function<void(const char*, std::size_t)> on_chunk = request.on_chunk;
+  WriteContext context{
+      request.collect_body ? &response_body : nullptr,
+      on_chunk ? &on_chunk : nullptr,
+  };
+
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &context);
     curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, &response_headers);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -88,11 +113,15 @@ public:
       std::string message = std::string("libcurl error: ") + curl_easy_strerror(res);
       curl_slist_free_all(header_list);
       curl_easy_cleanup(curl);
-      throw OpenAIError(message);
-    }
+    throw OpenAIError(message);
+  }
 
-    long status_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status_code);
+  long status_code = 0;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status_code);
+
+  if (context.error) {
+    throw OpenAIError(context.error_message.empty() ? "Streaming callback failed" : context.error_message);
+  }
 
     curl_slist_free_all(header_list);
     curl_easy_cleanup(curl);

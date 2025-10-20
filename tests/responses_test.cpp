@@ -114,6 +114,33 @@ TEST(ResponsesResourceTest, CancelParsesResponse) {
   EXPECT_NE(request.url.find("/responses/resp_cancel/cancel"), std::string::npos);
 }
 
+TEST(ResponsesResourceTest, CreateStreamParsesEvents) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string body =
+      "data: {\\"type\\":\\"response.output_text.delta\\",\\"sequence_number\\":1,"
+      "\\"output_index\\":0,\\"content_index\\":0,\\"snapshot\\":\\"Hello\\"}\n\n";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, body});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  ResponseRequest request;
+  request.body = json{{"model", "gpt-4o"}, {"input", json::array()}};
+
+  auto events = client.responses().create_stream(request);
+  ASSERT_EQ(events.size(), 1u);
+  EXPECT_NE(events[0].data.find("Hello"), std::string::npos);
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  EXPECT_EQ(mock_ptr->last_request()->headers.at("Accept"), "text/event-stream");
+}
+
 TEST(ResponsesResourceTest, ListParsesResponsesArray) {
   using namespace openai;
 

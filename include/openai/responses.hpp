@@ -6,6 +6,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "openai/streaming.hpp"
+
 namespace openai {
 
 struct ResponseUsage {
@@ -71,6 +73,15 @@ public:
 
   ResponseList list() const;
   ResponseList list(const struct RequestOptions& options) const;
+
+  std::vector<ServerSentEvent> create_stream(const ResponseRequest& request) const;
+  std::vector<ServerSentEvent> create_stream(const ResponseRequest& request,
+                                             const struct RequestOptions& options) const;
+
+  std::vector<ServerSentEvent> retrieve_stream(const std::string& response_id) const;
+  std::vector<ServerSentEvent> retrieve_stream(const std::string& response_id,
+                                               const ResponseRetrieveOptions& retrieve_options,
+                                               const struct RequestOptions& options) const;
 
 private:
   OpenAIClient& client_;

@@ -2,6 +2,7 @@
 
 #include "openai/client.hpp"
 #include "openai/error.hpp"
+#include "openai/streaming.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -193,6 +194,59 @@ ResponseList ResponsesResource::list(const RequestOptions& options) const {
 
 ResponseList ResponsesResource::list() const {
   return list(RequestOptions{});
+}
+
+std::vector<ServerSentEvent> ResponsesResource::create_stream(const ResponseRequest& request,
+                                                              const RequestOptions& options) const {
+  SSEParser parser;
+  std::vector<ServerSentEvent> events;
+
+  auto body = build_request_body(request);
+  body["stream"] = true;
+
+  RequestOptions request_options = options;
+  request_options.headers["Accept"] = "text/event-stream";
+  request_options.collect_body = false;
+  request_options.on_chunk = [&](const char* data, std::size_t size) {
+    auto chunk_events = parser.feed(data, size);
+    events.insert(events.end(), chunk_events.begin(), chunk_events.end());
+  };
+
+  client_.perform_request("POST", kResponseEndpoint, body.dump(), request_options);
+
+  auto remaining = parser.finalize();
+  events.insert(events.end(), remaining.begin(), remaining.end());
+  return events;
+}
+
+std::vector<ServerSentEvent> ResponsesResource::create_stream(const ResponseRequest& request) const {
+  return create_stream(request, RequestOptions{});
+}
+
+std::vector<ServerSentEvent> ResponsesResource::retrieve_stream(const std::string& response_id,
+                                                                const ResponseRetrieveOptions& retrieve_options,
+                                                                const RequestOptions& options) const {
+  SSEParser parser;
+  std::vector<ServerSentEvent> events;
+
+  RequestOptions request_options = options;
+  request_options.headers["Accept"] = "text/event-stream";
+  request_options.collect_body = false;
+  request_options.query_params["stream"] = retrieve_options.stream ? "true" : "false";
+  request_options.on_chunk = [&](const char* data, std::size_t size) {
+    auto chunk_events = parser.feed(data, size);
+    events.insert(events.end(), chunk_events.begin(), chunk_events.end());
+  };
+
+  client_.perform_request("GET", build_response_path(response_id), "", request_options);
+
+  auto remaining = parser.finalize();
+  events.insert(events.end(), remaining.begin(), remaining.end());
+  return events;
+}
+
+std::vector<ServerSentEvent> ResponsesResource::retrieve_stream(const std::string& response_id) const {
+  return retrieve_stream(response_id, ResponseRetrieveOptions{.stream = true}, RequestOptions{});
 }
 
 }  // namespace openai

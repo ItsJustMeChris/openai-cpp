@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -13,6 +14,8 @@ struct HttpRequest {
   std::map<std::string, std::string> headers;
   std::string body;
   std::chrono::milliseconds timeout{60000};
+  std::function<void(const char*, std::size_t)> on_chunk;
+  bool collect_body = true;
 };
 
 struct HttpResponse {
@@ -30,4 +33,3 @@ public:
 std::unique_ptr<HttpClient> make_default_http_client();
 
 }  // namespace openai
-

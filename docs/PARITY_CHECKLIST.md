@@ -33,7 +33,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Chat completions (basic create)
 - [ ] Chat completions advanced features (streaming, stored completions, tool runners)
 - [x] Responses (non-streaming create/retrieve/list/cancel/delete)
-- [ ] Responses advanced features (streaming, input items, tool runners)
+- [ ] Responses advanced features (streaming, input items, tool runners) – SSE event parsing available
 - [x] Models (retrieve/list/delete; pagination helpers pending)
 - [x] Embeddings (default base64 decode, float/base64 variants)
 - [x] Moderations (basic create)

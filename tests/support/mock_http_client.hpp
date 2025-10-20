@@ -36,7 +36,14 @@ public:
     if (std::holds_alternative<EnqueuedError>(next)) {
       throw OpenAIError(std::get<EnqueuedError>(next).message);
     }
-    return std::get<HttpResponse>(next);
+    auto response = std::get<HttpResponse>(next);
+    if (request.on_chunk) {
+      request.on_chunk(response.body.data(), response.body.size());
+    }
+    if (!request.collect_body) {
+      response.body.clear();
+    }
+    return response;
   }
 
   void enqueue_response(HttpResponse response) {
