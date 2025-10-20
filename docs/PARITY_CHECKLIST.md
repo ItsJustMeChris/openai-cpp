@@ -30,7 +30,8 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 
 ## REST Resources
 - [x] Completions (`/completions`)
-- [ ] Chat (`/chat.completions` and nested resources)
+- [x] Chat completions (basic create)
+- [ ] Chat completions advanced features (streaming, stored completions, tool runners)
 - [ ] Responses (`/responses`)
 - [x] Models (retrieve/list/delete; pagination helpers pending)
 - [x] Embeddings (default base64 decode, float/base64 variants)

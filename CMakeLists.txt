@@ -11,6 +11,7 @@ add_library(openai-cpp
     src/client.cpp
     src/http_client.cpp
     src/utils/base64.cpp
+    src/chat.cpp
 )
 
 target_include_directories(openai-cpp

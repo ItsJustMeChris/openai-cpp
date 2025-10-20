@@ -11,6 +11,7 @@
 #include "openai/error.hpp"
 #include "openai/models.hpp"
 #include "openai/embeddings.hpp"
+#include "openai/chat.hpp"
 
 namespace openai {
 
@@ -83,6 +84,9 @@ public:
   EmbeddingsResource& embeddings() { return embeddings_; }
   const EmbeddingsResource& embeddings() const { return embeddings_; }
 
+  ChatResource& chat() { return chat_; }
+  const ChatResource& chat() const { return chat_; }
+
   Completion create_completion(const CompletionRequest& request,
                                const RequestOptions& options = {});
 
@@ -90,6 +94,7 @@ private:
   friend class CompletionsResource;
   friend class ModelsResource;
   friend class EmbeddingsResource;
+  friend class ChatCompletionsResource;
 
   HttpResponse perform_request(const std::string& method,
                                const std::string& path,
@@ -101,6 +106,7 @@ private:
   CompletionsResource completions_;
   ModelsResource models_;
   EmbeddingsResource embeddings_;
+  ChatResource chat_;
 };
 
 }  // namespace openai

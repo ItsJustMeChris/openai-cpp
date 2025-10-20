@@ -230,7 +230,8 @@ OpenAIClient::OpenAIClient(ClientOptions options,
       http_client_(http_client ? std::move(http_client) : make_default_http_client()),
       completions_(*this),
       models_(*this),
-      embeddings_(*this) {
+      embeddings_(*this),
+      chat_(*this) {
   if (options_.api_key.empty()) {
     throw OpenAIError("ClientOptions.api_key must be set");
   }

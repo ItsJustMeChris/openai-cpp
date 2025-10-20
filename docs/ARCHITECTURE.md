@@ -31,4 +31,4 @@ Key translation decisions:
 - Request/response payloads use `nlohmann::json` for serialization which closely matches the JSON-first nature of the TypeScript SDK.
 - Optional resource parameters map to `std::optional` fields; repeated values use `std::vector`.
 
-This scaffold currently supports `client.completions().create()`, the `client.models()` surface (retrieve/list/delete), and `client.embeddings().create()` with base64 decoding parity. Additional endpoints can be added by introducing new resource headers mirroring the corresponding TypeScript modules and reusing the `perform_request` helper for consistent authentication and error handling.
+This scaffold currently supports `client.completions().create()`, the `client.models()` surface (retrieve/list/delete), `client.embeddings().create()` with base64 decoding parity, and a basic `client.chat().completions().create()` implementation. Additional endpoints can be added by introducing new resource headers mirroring the corresponding TypeScript modules and reusing the `perform_request` helper for consistent authentication and error handling.
