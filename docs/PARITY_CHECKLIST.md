@@ -38,7 +38,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Embeddings (default base64 decode, float/base64 variants)
 - [x] Moderations (basic create)
 - [x] Files (list/retrieve/create/delete/content; advanced upload helpers pending)
-- [ ] Images (generate/edit/variation + streaming events)
+- [x] Images (generate/edit/variation basic support; streaming events pending)
 - [ ] Audio (speech, transcription, translation)
 - [ ] Batches
 - [ ] Vector stores + assistants

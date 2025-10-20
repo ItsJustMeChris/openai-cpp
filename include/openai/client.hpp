@@ -15,6 +15,7 @@
 #include "openai/moderations.hpp"
 #include "openai/responses.hpp"
 #include "openai/files.hpp"
+#include "openai/images.hpp"
 
 namespace openai {
 
@@ -119,6 +120,9 @@ public:
   FilesResource& files() { return files_; }
   const FilesResource& files() const { return files_; }
 
+  ImagesResource& images() { return images_; }
+  const ImagesResource& images() const { return images_; }
+
   ChatResource& chat() { return chat_; }
   const ChatResource& chat() const { return chat_; }
 
@@ -132,6 +136,7 @@ private:
   friend class ModerationsResource;
   friend class ResponsesResource;
   friend class FilesResource;
+  friend class ImagesResource;
   friend class ChatCompletionsResource;
 
   HttpResponse perform_request(const std::string& method,
@@ -149,6 +154,7 @@ private:
   ModerationsResource moderations_;
   ResponsesResource responses_;
   FilesResource files_;
+  ImagesResource images_;
   ChatResource chat_;
 };
 

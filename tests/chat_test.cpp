@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "openai/client.hpp"
 #include "openai/chat.hpp"
 #include "support/mock_http_client.hpp"
 
@@ -13,9 +14,10 @@ TEST(ChatCompletionsResourceTest, CreateStreamParsesEvents) {
   auto mock_client = std::make_unique<oait::MockHttpClient>();
   auto* mock_ptr = mock_client.get();
 
-  const std::string body =
-      "event: message\n"
-      "data: {\\"id\\":\\"chatcmpl-123\\",\\"choices\\":[{\\"delta\\":{\\"content\\":\\"Hello\\"}}]}\n\n";
+  const std::string body = R"(event: message
+data: {"id":"chatcmpl-123","choices":[{"delta":{"content":"Hello"}}]}
+
+)";
 
   mock_ptr->enqueue_response(HttpResponse{200, {}, body});
 

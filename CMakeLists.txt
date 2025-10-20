@@ -17,6 +17,7 @@ add_library(openai-cpp
     src/moderations.cpp
     src/responses.cpp
     src/files.cpp
+    src/images.cpp
     src/streaming.cpp
 )
 
