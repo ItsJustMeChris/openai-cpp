@@ -2,6 +2,7 @@
 
 #include "openai/client.hpp"
 #include "openai/error.hpp"
+#include "openai/streaming.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -212,6 +213,44 @@ ChatCompletion ChatCompletionsResource::create(const ChatCompletionRequest& requ
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse chat completion response: ") + ex.what());
   }
+}
+
+std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCompletionRequest& request,
+                                                                    const RequestOptions& options) const {
+  json body = request.extra_params.is_null() ? json::object() : request.extra_params;
+  if (!body.is_object()) {
+    throw OpenAIError("ChatCompletionRequest.extra_params must be an object");
+  }
+
+  body["model"] = request.model;
+
+  json messages = json::array();
+  for (const auto& message : request.messages) {
+    messages.push_back(message_to_json(message));
+  }
+  body["messages"] = std::move(messages);
+  body["stream"] = true;
+
+  RequestOptions request_options = options;
+  request_options.headers["Accept"] = "text/event-stream";
+  request_options.collect_body = false;
+
+  SSEParser parser;
+  std::vector<ServerSentEvent> events;
+  request_options.on_chunk = [&](const char* data, std::size_t size) {
+    auto chunk_events = parser.feed(data, size);
+    events.insert(events.end(), chunk_events.begin(), chunk_events.end());
+  };
+
+  client_.perform_request("POST", "/chat/completions", body.dump(), request_options);
+
+  auto remaining = parser.finalize();
+  events.insert(events.end(), remaining.begin(), remaining.end());
+  return events;
+}
+
+std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCompletionRequest& request) const {
+  return create_stream(request, RequestOptions{});
 }
 
 }  // namespace openai

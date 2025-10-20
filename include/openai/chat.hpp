@@ -7,6 +7,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "openai/streaming.hpp"
+
 namespace openai {
 
 struct ChatMessageContent {
@@ -76,6 +78,10 @@ public:
   ChatCompletion create(const ChatCompletionRequest& request) const;
   ChatCompletion create(const ChatCompletionRequest& request,
                         const struct RequestOptions& options) const;
+
+  std::vector<ServerSentEvent> create_stream(const ChatCompletionRequest& request) const;
+  std::vector<ServerSentEvent> create_stream(const ChatCompletionRequest& request,
+                                             const struct RequestOptions& options) const;
 
 private:
   OpenAIClient& client_;
