@@ -9,6 +9,7 @@
 #include "openai/completions.hpp"
 #include "openai/http_client.hpp"
 #include "openai/error.hpp"
+#include "openai/models.hpp"
 
 namespace openai {
 
@@ -40,6 +41,20 @@ private:
   OpenAIClient& client_;
 };
 
+class ModelsResource {
+public:
+  explicit ModelsResource(OpenAIClient& client) : client_(client) {}
+
+  Model retrieve(const std::string& model, const RequestOptions& options = {}) const;
+
+  ModelList list(const RequestOptions& options = {}) const;
+
+  ModelDeleted Delete(const std::string& model, const RequestOptions& options = {}) const;
+
+private:
+  OpenAIClient& client_;
+};
+
 class OpenAIClient {
 public:
   explicit OpenAIClient(ClientOptions options,
@@ -50,11 +65,15 @@ public:
   CompletionsResource& completions() { return completions_; }
   const CompletionsResource& completions() const { return completions_; }
 
+  ModelsResource& models() { return models_; }
+  const ModelsResource& models() const { return models_; }
+
   Completion create_completion(const CompletionRequest& request,
                                const RequestOptions& options = {});
 
 private:
   friend class CompletionsResource;
+  friend class ModelsResource;
 
   HttpResponse perform_request(const std::string& method,
                                const std::string& path,
@@ -64,6 +83,7 @@ private:
   ClientOptions options_;
   std::unique_ptr<HttpClient> http_client_;
   CompletionsResource completions_;
+  ModelsResource models_;
 };
 
 }  // namespace openai

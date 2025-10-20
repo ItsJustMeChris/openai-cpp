@@ -67,6 +67,34 @@ Completion parse_completion(const json& payload) {
   return completion;
 }
 
+Model parse_model(const json& payload) {
+  Model model;
+  model.id = payload.value("id", "");
+  model.created = payload.value("created", 0);
+  model.object = payload.value("object", "");
+  model.owned_by = payload.value("owned_by", "");
+  return model;
+}
+
+ModelList parse_model_list(const json& payload) {
+  ModelList list;
+  list.object = payload.value("object", "");
+  if (payload.contains("data")) {
+    for (const auto& model_json : payload.at("data")) {
+      list.data.push_back(parse_model(model_json));
+    }
+  }
+  return list;
+}
+
+ModelDeleted parse_model_deleted(const json& payload) {
+  ModelDeleted deleted;
+  deleted.id = payload.value("id", "");
+  deleted.deleted = payload.value("deleted", false);
+  deleted.object = payload.value("object", "");
+  return deleted;
+}
+
 std::string build_url(const std::string& base_url, const std::string& path) {
   if (path.empty()) {
     return base_url;
@@ -104,7 +132,8 @@ OpenAIClient::OpenAIClient(ClientOptions options,
                            std::unique_ptr<HttpClient> http_client)
     : options_(std::move(options)),
       http_client_(http_client ? std::move(http_client) : make_default_http_client()),
-      completions_(*this) {
+      completions_(*this),
+      models_(*this) {
   if (options_.api_key.empty()) {
     throw OpenAIError("ClientOptions.api_key must be set");
   }
@@ -175,6 +204,38 @@ Completion CompletionsResource::create(const CompletionRequest& request,
     return parse_completion(payload);
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse completion response: ") + ex.what());
+  }
+}
+
+Model ModelsResource::retrieve(const std::string& model_id, const RequestOptions& options) const {
+  auto path = std::string("/models/") + model_id;
+  auto response = client_.perform_request("GET", path, "", options);
+  try {
+    auto payload = json::parse(response.body);
+    return parse_model(payload);
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse model response: ") + ex.what());
+  }
+}
+
+ModelList ModelsResource::list(const RequestOptions& options) const {
+  auto response = client_.perform_request("GET", "/models", "", options);
+  try {
+    auto payload = json::parse(response.body);
+    return parse_model_list(payload);
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse models list: ") + ex.what());
+  }
+}
+
+ModelDeleted ModelsResource::Delete(const std::string& model_id, const RequestOptions& options) const {
+  auto path = std::string("/models/") + model_id;
+  auto response = client_.perform_request("DELETE", path, "", options);
+  try {
+    auto payload = json::parse(response.body);
+    return parse_model_deleted(payload);
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse model deletion response: ") + ex.what());
   }
 }
 
