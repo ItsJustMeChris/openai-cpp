@@ -43,9 +43,45 @@ struct VectorStoreFileCreateRequest {
   nlohmann::json extra = nlohmann::json::object();
 };
 
+struct VectorStoreFileBatch {
+  std::string id;
+  std::string object;
+  std::string status;
+  nlohmann::json file_counts = nlohmann::json::object();
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct VectorStoreFileBatchCreateRequest {
+  std::vector<std::string> file_ids;
+  nlohmann::json extra = nlohmann::json::object();
+};
+
 struct VectorStoreFileDeleteResponse {
   std::string id;
   bool deleted = false;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct VectorStoreSearchRequest {
+  std::vector<std::string> query;
+  nlohmann::json filters = nlohmann::json::object();
+  std::optional<int> max_num_results;
+  std::optional<nlohmann::json> ranking_options;
+  std::optional<bool> rewrite_query;
+  nlohmann::json extra = nlohmann::json::object();
+};
+
+struct VectorStoreSearchResult {
+  std::string file_id;
+  std::string filename;
+  double score = 0.0;
+  std::vector<std::string> content;
+  nlohmann::json attributes = nlohmann::json::object();
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct VectorStoreSearchResults {
+  std::vector<VectorStoreSearchResult> data;
   nlohmann::json raw = nlohmann::json::object();
 };
 
@@ -100,6 +136,25 @@ public:
   VectorStoreFileDeleteResponse remove_file(const std::string& vector_store_id, const std::string& file_id) const;
   VectorStoreFileDeleteResponse remove_file(const std::string& vector_store_id, const std::string& file_id,
                                             const RequestOptions& options) const;
+
+  VectorStoreFileBatch create_file_batch(const std::string& vector_store_id,
+                                         const VectorStoreFileBatchCreateRequest& request) const;
+  VectorStoreFileBatch create_file_batch(const std::string& vector_store_id,
+                                         const VectorStoreFileBatchCreateRequest& request,
+                                         const RequestOptions& options) const;
+
+  VectorStoreFileBatch retrieve_file_batch(const std::string& vector_store_id, const std::string& batch_id) const;
+  VectorStoreFileBatch retrieve_file_batch(const std::string& vector_store_id, const std::string& batch_id,
+                                           const RequestOptions& options) const;
+
+  VectorStoreFileBatch cancel_file_batch(const std::string& vector_store_id, const std::string& batch_id) const;
+  VectorStoreFileBatch cancel_file_batch(const std::string& vector_store_id, const std::string& batch_id,
+                                         const RequestOptions& options) const;
+
+  VectorStoreSearchResults search(const std::string& vector_store_id, const VectorStoreSearchRequest& request) const;
+  VectorStoreSearchResults search(const std::string& vector_store_id,
+                                  const VectorStoreSearchRequest& request,
+                                  const RequestOptions& options) const;
 
 private:
   OpenAIClient& client_;

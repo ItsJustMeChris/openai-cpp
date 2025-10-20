@@ -184,3 +184,101 @@ TEST(VectorStoresResourceTest, DeleteFileParsesResponse) {
   auto result = client.vector_stores().remove_file("vs_123", "vsf_123");
   EXPECT_TRUE(result.deleted);
 }
+
+TEST(VectorStoresResourceTest, CreateFileBatchParsesResponse) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string body = R"({
+    "id": "vsfb_123",
+    "object": "vector_store.file_batch",
+    "status": "in_progress",
+    "file_counts": {"in_progress": 1, "completed": 0, "failed": 0}
+  })";
+  mock_ptr->enqueue_response(HttpResponse{200, {}, body});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  VectorStoreFileBatchCreateRequest request;
+  request.file_ids = {"file_1", "file_2"};
+
+  auto batch = client.vector_stores().create_file_batch("vs_123", request);
+  EXPECT_EQ(batch.id, "vsfb_123");
+  EXPECT_EQ(batch.status, "in_progress");
+  ASSERT_TRUE(batch.file_counts.is_object());
+
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  EXPECT_EQ(mock_ptr->last_request()->headers.at("OpenAI-Beta"), "assistants=v2");
+}
+
+TEST(VectorStoresResourceTest, RetrieveAndCancelFileBatch) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string retrieve_body = R"({
+    "id": "vsfb_123",
+    "object": "vector_store.file_batch",
+    "status": "completed"
+  })";
+  const std::string cancel_body = R"({
+    "id": "vsfb_123",
+    "object": "vector_store.file_batch",
+    "status": "cancelled"
+  })";
+  mock_ptr->enqueue_response(HttpResponse{200, {}, retrieve_body});
+  mock_ptr->enqueue_response(HttpResponse{200, {}, cancel_body});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  auto retrieved = client.vector_stores().retrieve_file_batch("vs_123", "vsfb_123");
+  EXPECT_EQ(retrieved.status, "completed");
+
+  auto cancelled = client.vector_stores().cancel_file_batch("vs_123", "vsfb_123");
+  EXPECT_EQ(cancelled.status, "cancelled");
+}
+
+TEST(VectorStoresResourceTest, SearchReturnsResults) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string body = R"({
+    "data": [
+      {
+        "file_id": "file123",
+        "filename": "doc.txt",
+        "score": 0.9,
+        "content": [{"text": "matching content"}],
+        "attributes": {"project": "demo"}
+      }
+    ]
+  })";
+  mock_ptr->enqueue_response(HttpResponse{200, {}, body});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  VectorStoreSearchRequest request;
+  request.query = {"hello"};
+
+  auto results = client.vector_stores().search("vs_123", request);
+  ASSERT_EQ(results.data.size(), 1u);
+  EXPECT_EQ(results.data[0].file_id, "file123");
+  EXPECT_EQ(results.data[0].content.front(), "matching content");
+
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  EXPECT_EQ(mock_ptr->last_request()->headers.at("OpenAI-Beta"), "assistants=v2");
+}

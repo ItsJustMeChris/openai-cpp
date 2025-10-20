@@ -14,6 +14,8 @@ using json = nlohmann::json;
 
 constexpr const char* kVectorStoresPath = "/vector_stores";
 constexpr const char* kVectorStoreFilesSuffix = "/files";
+constexpr const char* kVectorStoreFileBatchesSuffix = "/file_batches";
+constexpr const char* kVectorStoreFileBatchCancelSuffix = "/cancel";
 constexpr const char* kBetaHeaderName = "OpenAI-Beta";
 constexpr const char* kBetaHeaderValue = "assistants=v2";
 
@@ -86,6 +88,42 @@ VectorStoreFileDeleteResponse parse_vector_store_file_delete(const json& payload
   response.id = payload.value("id", "");
   response.deleted = payload.value("deleted", false);
   return response;
+}
+
+VectorStoreFileBatch parse_vector_store_file_batch(const json& payload) {
+  VectorStoreFileBatch batch;
+  batch.raw = payload;
+  batch.id = payload.value("id", "");
+  batch.object = payload.value("object", "");
+  batch.status = payload.value("status", "");
+  if (payload.contains("file_counts")) {
+    batch.file_counts = payload.at("file_counts");
+  }
+  return batch;
+}
+
+VectorStoreSearchResults parse_search_results(const json& payload) {
+  VectorStoreSearchResults results;
+  results.raw = payload;
+  if (payload.contains("data")) {
+    for (const auto& item : payload.at("data")) {
+      VectorStoreSearchResult result;
+      result.raw = item;
+      result.file_id = item.value("file_id", "");
+      result.filename = item.value("filename", "");
+      result.score = item.value("score", 0.0);
+      if (item.contains("content")) {
+        for (const auto& content_item : item.at("content")) {
+          result.content.push_back(content_item.value("text", ""));
+        }
+      }
+      if (item.contains("attributes")) {
+        result.attributes = item.at("attributes");
+      }
+      results.data.push_back(std::move(result));
+    }
+  }
+  return results;
 }
 
 json build_create_body(const VectorStoreCreateRequest& request) {
@@ -262,6 +300,118 @@ VectorStoreFileDeleteResponse VectorStoresResource::remove_file(const std::strin
 VectorStoreFileDeleteResponse VectorStoresResource::remove_file(const std::string& vector_store_id,
                                                                const std::string& file_id) const {
   return remove_file(vector_store_id, file_id, RequestOptions{});
+}
+
+VectorStoreFileBatch VectorStoresResource::create_file_batch(const std::string& vector_store_id,
+                                                             const VectorStoreFileBatchCreateRequest& request,
+                                                             const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_beta_header(request_options);
+
+  json body = request.extra.is_null() ? json::object() : request.extra;
+  if (!body.is_object()) {
+    throw OpenAIError("VectorStoreFileBatchCreateRequest.extra must be an object");
+  }
+  body["file_ids"] = request.file_ids;
+
+  auto path = std::string(kVectorStoresPath) + "/" + vector_store_id + kVectorStoreFileBatchesSuffix;
+  auto response = client_.perform_request("POST", path, body.dump(), request_options);
+  try {
+    auto payload = json::parse(response.body);
+    return parse_vector_store_file_batch(payload);
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse vector store file batch: ") + ex.what());
+  }
+}
+
+VectorStoreFileBatch VectorStoresResource::create_file_batch(const std::string& vector_store_id,
+                                                             const VectorStoreFileBatchCreateRequest& request) const {
+  return create_file_batch(vector_store_id, request, RequestOptions{});
+}
+
+VectorStoreFileBatch VectorStoresResource::retrieve_file_batch(const std::string& vector_store_id,
+                                                               const std::string& batch_id,
+                                                               const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_beta_header(request_options);
+  auto path = std::string(kVectorStoresPath) + "/" + vector_store_id + kVectorStoreFileBatchesSuffix + "/" + batch_id;
+  auto response = client_.perform_request("GET", path, "", request_options);
+  try {
+    auto payload = json::parse(response.body);
+    return parse_vector_store_file_batch(payload);
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse vector store file batch: ") + ex.what());
+  }
+}
+
+VectorStoreFileBatch VectorStoresResource::retrieve_file_batch(const std::string& vector_store_id,
+                                                               const std::string& batch_id) const {
+  return retrieve_file_batch(vector_store_id, batch_id, RequestOptions{});
+}
+
+VectorStoreFileBatch VectorStoresResource::cancel_file_batch(const std::string& vector_store_id,
+                                                             const std::string& batch_id,
+                                                             const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_beta_header(request_options);
+  auto path = std::string(kVectorStoresPath) + "/" + vector_store_id + kVectorStoreFileBatchesSuffix + "/" +
+              batch_id + kVectorStoreFileBatchCancelSuffix;
+  auto response = client_.perform_request("POST", path, json::object().dump(), request_options);
+  try {
+    auto payload = json::parse(response.body);
+    return parse_vector_store_file_batch(payload);
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse vector store file batch cancel response: ") + ex.what());
+  }
+}
+
+VectorStoreFileBatch VectorStoresResource::cancel_file_batch(const std::string& vector_store_id,
+                                                             const std::string& batch_id) const {
+  return cancel_file_batch(vector_store_id, batch_id, RequestOptions{});
+}
+
+VectorStoreSearchResults VectorStoresResource::search(const std::string& vector_store_id,
+                                                      const VectorStoreSearchRequest& request,
+                                                      const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_beta_header(request_options);
+
+  json body = request.extra.is_null() ? json::object() : request.extra;
+  if (!body.is_object()) {
+    throw OpenAIError("VectorStoreSearchRequest.extra must be an object");
+  }
+  if (request.query.size() == 1) {
+    body["query"] = request.query.front();
+  } else {
+    body["query"] = request.query;
+  }
+  if (!request.filters.empty()) {
+    body["filters"] = request.filters;
+  }
+  if (request.max_num_results) {
+    body["max_num_results"] = *request.max_num_results;
+  }
+  if (request.ranking_options) {
+    body["ranking_options"] = *request.ranking_options;
+  }
+  if (request.rewrite_query) {
+    body["rewrite_query"] = *request.rewrite_query;
+  }
+
+  auto path = std::string(kVectorStoresPath) + "/" + vector_store_id + "/search";
+  // search uses POST but returns a list; we mimic getAPIList behavior by performing POST then parsing list.
+  auto response = client_.perform_request("POST", path, body.dump(), request_options);
+  try {
+    auto payload = json::parse(response.body);
+    return parse_search_results(payload);
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse vector store search response: ") + ex.what());
+  }
+}
+
+VectorStoreSearchResults VectorStoresResource::search(const std::string& vector_store_id,
+                                                      const VectorStoreSearchRequest& request) const {
+  return search(vector_store_id, request, RequestOptions{});
 }
 
 }  // namespace openai
