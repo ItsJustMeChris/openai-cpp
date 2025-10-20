@@ -6,7 +6,7 @@ For the C++ port we plan to replicate that experience while keeping fast, hermet
 
 - **Mock HTTP transport** – The `tests/support/mock_http_client.hpp` helper can stand in for the default libcurl implementation and replay pre-baked `HttpResponse` objects. This unlocks deterministic tests for request serialization, header merging, error propagation, and JSON decoding without spinning up Prism.
 - **Prism integration (optional)** – For higher-level integration coverage we can reuse the OpenAPI fixture from `openai-node` and start the Prism mock during CI. Tests can wire the client with `ClientOptions{ .base_url = "http://127.0.0.1:4010" }` to exercise end-to-end behavior.
-- **Test framework** – The project does not yet vendor a unit test framework. GoogleTest or Catch2 are viable options; the mock client is framework-agnostic and can be used with either.
+- **Test framework** – GoogleTest support is wired behind the `OPENAI_CPP_BUILD_TESTS` CMake option. Enabling it uses `FetchContent` to download GoogleTest; in restricted network environments you may need to cache the dependency manually.
 
 Recommended next steps:
 

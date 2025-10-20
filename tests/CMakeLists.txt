@@ -1,0 +1,26 @@
+add_library(test_support INTERFACE)
+target_include_directories(test_support INTERFACE
+    ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/support
+    ${CMAKE_CURRENT_LIST_DIR}/../external
+)
+
+target_link_libraries(test_support INTERFACE openai-cpp)
+
+target_compile_features(test_support INTERFACE cxx_std_17)
+
+target_compile_definitions(test_support INTERFACE
+    $<$<CXX_COMPILER_ID:MSVC>:_SILENCE_ALL_MSVC_DEPRECATION_WARNINGS>
+)
+
+add_executable(openai-cpp-tests
+    ${CMAKE_CURRENT_LIST_DIR}/responses_test.cpp
+)
+
+target_link_libraries(openai-cpp-tests PRIVATE
+    test_support
+    GTest::gtest_main
+)
+
+include(GoogleTest)
+gtest_discover_tests(openai-cpp-tests)

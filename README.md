@@ -21,6 +21,10 @@ This repository houses an in-progress native C++ port of the official `openai-no
 ```bash
 cmake -S . -B build
 cmake --build build
+
+# Enable unit tests (requires GoogleTest and network access to fetch by default)
+cmake -S . -B build -DOPENAI_CPP_BUILD_TESTS=ON
+cmake --build build
 ```
 
 The `openai-cli` demo binary shows basic usage. Before running it, export an API key:

@@ -7,6 +7,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(CURL REQUIRED)
 
+option(OPENAI_CPP_BUILD_TESTS "Build openai-cpp tests" OFF)
+
 add_library(openai-cpp
     src/client.cpp
     src/http_client.cpp
@@ -35,3 +37,19 @@ add_executable(openai-cli apps/demo.cpp)
 target_link_libraries(openai-cli PRIVATE openai-cpp)
 
 target_include_directories(openai-cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external)
+
+if (OPENAI_CPP_BUILD_TESTS)
+  include(CTest)
+  include(FetchContent)
+  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+  set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+  set(BUILD_GTEST ON CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  )
+  FetchContent_MakeAvailable(googletest)
+
+  add_subdirectory(tests)
+endif()
