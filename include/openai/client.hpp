@@ -142,6 +142,8 @@ private:
   friend class FilesResource;
   friend class ImagesResource;
   friend class AudioTranscriptionsResource;
+  friend class AudioTranslationsResource;
+  friend class AudioSpeechResource;
   friend class ChatCompletionsResource;
 
   HttpResponse perform_request(const std::string& method,

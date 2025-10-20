@@ -120,9 +120,8 @@ TEST(ResponsesResourceTest, CreateStreamParsesEvents) {
   auto mock_client = std::make_unique<oait::MockHttpClient>();
   auto* mock_ptr = mock_client.get();
 
-  const std::string body = R"(data: {"type":"response.output_text.delta","sequence_number":1,"output_index":0,"content_index":0,"snapshot":"Hello"}
-
-)";
+  const std::string body = "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":1,"
+                             "\"output_index\":0,\"content_index\":0,\"snapshot\":\"Hello\"}\n\n";
 
   mock_ptr->enqueue_response(HttpResponse{200, {}, body});
 

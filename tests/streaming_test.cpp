@@ -2,6 +2,8 @@
 
 #include "openai/streaming.hpp"
 
+#include <cstring>
+
 TEST(StreamingTest, ParsesBasicEvents) {
   const std::string payload =
       "event: message\n"
@@ -23,11 +25,11 @@ TEST(StreamingTest, IncrementalFeed) {
   openai::SSEParser parser;
   std::vector<openai::ServerSentEvent> events;
 
-  auto chunk1 = parser.feed("data: part", 10);
+  auto chunk1 = parser.feed("data: part", std::strlen("data: part"));
   events.insert(events.end(), chunk1.begin(), chunk1.end());
   EXPECT_TRUE(events.empty());
 
-  auto chunk2 = parser.feed("ial\n\n", 6);
+  auto chunk2 = parser.feed("ial\n\n", std::strlen("ial\n\n"));
   events.insert(events.end(), chunk2.begin(), chunk2.end());
   auto remaining = parser.finalize();
   events.insert(events.end(), remaining.begin(), remaining.end());

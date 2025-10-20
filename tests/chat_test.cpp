@@ -14,10 +14,8 @@ TEST(ChatCompletionsResourceTest, CreateStreamParsesEvents) {
   auto mock_client = std::make_unique<oait::MockHttpClient>();
   auto* mock_ptr = mock_client.get();
 
-  const std::string body = R"(event: message
-data: {"id":"chatcmpl-123","choices":[{"delta":{"content":"Hello"}}]}
-
-)";
+  const std::string body = "event: message\n"
+                           "data: {\"id\":\"chatcmpl-123\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n";
 
   mock_ptr->enqueue_response(HttpResponse{200, {}, body});
 
