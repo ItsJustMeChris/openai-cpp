@@ -1,0 +1,36 @@
+# Build directories
+/build/
+/out/
+/bin/
+
+# CMake artifacts
+/CMakeCache.txt
+/CMakeFiles/
+/cmake_install.cmake
+/install_manifest.txt
+/Makefile
+/compile_commands.json
+
+# Compiled objects
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.pdb
+
+# IDE / Editor noise
+*.swp
+*.swo
+*~
+.DS_Store
+.vscode/
+.idea/
+
+# Dependency cache
+.externalNativeBuild/
