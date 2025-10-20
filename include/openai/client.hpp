@@ -12,11 +12,13 @@
 #include "openai/models.hpp"
 #include "openai/embeddings.hpp"
 #include "openai/chat.hpp"
+#include "openai/moderations.hpp"
 
 namespace openai {
 
 struct RequestOptions {
   std::map<std::string, std::string> headers;
+  std::map<std::string, std::string> query_params;
   std::optional<std::string> idempotency_key;
   std::optional<std::chrono::milliseconds> timeout;
 };
@@ -68,6 +70,18 @@ private:
   OpenAIClient& client_;
 };
 
+class ModerationsResource {
+public:
+  explicit ModerationsResource(OpenAIClient& client) : client_(client) {}
+
+  ModerationCreateResponse create(const ModerationRequest& request) const;
+  ModerationCreateResponse create(const ModerationRequest& request,
+                                  const RequestOptions& options) const;
+
+private:
+  OpenAIClient& client_;
+};
+
 class OpenAIClient {
 public:
   explicit OpenAIClient(ClientOptions options,
@@ -84,6 +98,9 @@ public:
   EmbeddingsResource& embeddings() { return embeddings_; }
   const EmbeddingsResource& embeddings() const { return embeddings_; }
 
+  ModerationsResource& moderations() { return moderations_; }
+  const ModerationsResource& moderations() const { return moderations_; }
+
   ChatResource& chat() { return chat_; }
   const ChatResource& chat() const { return chat_; }
 
@@ -94,6 +111,7 @@ private:
   friend class CompletionsResource;
   friend class ModelsResource;
   friend class EmbeddingsResource;
+  friend class ModerationsResource;
   friend class ChatCompletionsResource;
 
   HttpResponse perform_request(const std::string& method,
@@ -106,6 +124,7 @@ private:
   CompletionsResource completions_;
   ModelsResource models_;
   EmbeddingsResource embeddings_;
+  ModerationsResource moderations_;
   ChatResource chat_;
 };
 

@@ -6,7 +6,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Configuration object (`ClientOptions`) with auth headers and base URL
 - [x] HTTP transport abstraction (`HttpClient`) with default libcurl backend
 - [ ] Retry and backoff policy parity (`maxRetries`, retry-after handling)
-- [ ] Request option merging (`RequestOptions`, idempotency, query parameters)
+- [ ] Request option merging (`RequestOptions`, idempotency, query parameters) – headers/query support implemented
 - [ ] Platform detection + header helpers (User-Agent parity)
 - [ ] Streaming helpers (Server-Sent Events, chunk decoding)
 - [ ] Pagination abstractions (`AbstractPage`, cursor/page responses)
@@ -35,6 +35,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [ ] Responses (`/responses`)
 - [x] Models (retrieve/list/delete; pagination helpers pending)
 - [x] Embeddings (default base64 decode, float/base64 variants)
+- [x] Moderations (basic create)
 - [ ] Files (list/upload/download/delete)
 - [ ] Images (generate/edit/variation + streaming events)
 - [ ] Audio (speech, transcription, translation)

@@ -10,6 +10,9 @@
 #include <variant>
 #include <cstdint>
 #include <cstring>
+#include <sstream>
+#include <iomanip>
+#include <cctype>
 
 #include "openai/utils/base64.hpp"
 
@@ -94,6 +97,71 @@ Completion parse_completion(const json& payload) {
   }
 
   return completion;
+}
+
+bool is_unreserved(char c) {
+  if (std::isalnum(static_cast<unsigned char>(c))) {
+    return true;
+  }
+  switch (c) {
+    case '-':
+    case '_':
+    case '.':
+    case '~':
+      return true;
+    default:
+      return false;
+  }
+}
+
+std::string url_encode(const std::string& value) {
+  std::ostringstream escaped;
+  escaped.fill('0');
+  escaped << std::hex << std::uppercase;
+
+  for (unsigned char c : value) {
+    if (is_unreserved(static_cast<char>(c))) {
+      escaped << static_cast<char>(c);
+    } else {
+      escaped << '%'
+              << std::setw(2)
+              << std::setfill('0')
+              << static_cast<int>(c);
+    }
+  }
+
+  return escaped.str();
+}
+
+std::string append_query_params(const std::string& url,
+                                const std::map<std::string, std::string>& query_params) {
+  if (query_params.empty()) {
+    return url;
+  }
+
+  std::ostringstream query;
+  bool first = true;
+  for (const auto& [key, value] : query_params) {
+    if (key.empty()) {
+      continue;
+    }
+    if (!first) {
+      query << '&';
+    }
+    query << url_encode(key) << '=';
+    query << url_encode(value);
+    first = false;
+  }
+
+  std::string query_string = query.str();
+  if (query_string.empty()) {
+    return url;
+  }
+
+  std::string result = url;
+  result += (url.find('?') == std::string::npos) ? '?' : '&';
+  result += query_string;
+  return result;
 }
 
 std::vector<float> bytes_to_float32(const std::vector<std::uint8_t>& bytes) {
@@ -231,6 +299,7 @@ OpenAIClient::OpenAIClient(ClientOptions options,
       completions_(*this),
       models_(*this),
       embeddings_(*this),
+      moderations_(*this),
       chat_(*this) {
   if (options_.api_key.empty()) {
     throw OpenAIError("ClientOptions.api_key must be set");
@@ -248,7 +317,9 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
                                            const RequestOptions& options) const {
   HttpRequest http_request;
   http_request.method = method;
-  http_request.url = build_url(options_.base_url, path);
+  std::string url = build_url(options_.base_url, path);
+  url = append_query_params(url, options.query_params);
+  http_request.url = std::move(url);
   http_request.body = body;
   http_request.timeout = options.timeout.value_or(options_.timeout);
 
