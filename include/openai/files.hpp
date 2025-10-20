@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -35,6 +37,18 @@ struct FileList {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct FileContent {
+  std::vector<std::uint8_t> data;
+  std::map<std::string, std::string> headers;
+};
+
+struct FileUploadRequest {
+  std::string purpose;
+  std::string file_path;
+  std::optional<std::string> file_name;
+  std::optional<std::string> content_type;
+};
+
 struct RequestOptions;
 
 class OpenAIClient;
@@ -52,9 +66,14 @@ public:
   FileDeleted remove(const std::string& file_id) const;
   FileDeleted remove(const std::string& file_id, const RequestOptions& options) const;
 
+  FileObject create(const FileUploadRequest& request) const;
+  FileObject create(const FileUploadRequest& request, const RequestOptions& options) const;
+
+  FileContent content(const std::string& file_id) const;
+  FileContent content(const std::string& file_id, const RequestOptions& options) const;
+
 private:
   OpenAIClient& client_;
 };
 
 }  // namespace openai
-

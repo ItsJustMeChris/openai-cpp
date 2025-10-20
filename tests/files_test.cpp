@@ -6,6 +6,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include <filesystem>
+#include <fstream>
+
 using json = nlohmann::json;
 namespace oait = openai::testing;
 
@@ -103,4 +106,64 @@ TEST(FilesResourceTest, DeleteParsesResponse) {
   EXPECT_TRUE(deleted.deleted);
 
   ASSERT_TRUE(mock_ptr->last_request().has_value());
+}
+
+TEST(FilesResourceTest, CreateBuildsMultipartBody) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, R"({"id":"file-upload","bytes":5,"created_at":1,"filename":"upload.txt","object":"file","purpose":"assistants"})"});
+
+  std::filesystem::path tmp = std::filesystem::temp_directory_path() / "openai-cpp-upload.txt";
+  {
+    std::ofstream tmp_file(tmp, std::ios::binary);
+    tmp_file << "hello";
+  }
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  FileUploadRequest request;
+  request.purpose = "assistants";
+  request.file_path = tmp.string();
+  request.file_name = "upload.txt";
+
+  auto file = client.files().create(request);
+  EXPECT_EQ(file.id, "file-upload");
+
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  const auto& last_request = *mock_ptr->last_request();
+  ASSERT_TRUE(last_request.headers.count("Content-Type"));
+  EXPECT_NE(last_request.headers.at("Content-Type").find("multipart/form-data"), std::string::npos);
+  EXPECT_NE(last_request.body.find("assistants"), std::string::npos);
+  EXPECT_NE(last_request.body.find("hello"), std::string::npos);
+
+  std::filesystem::remove(tmp);
+}
+
+TEST(FilesResourceTest, ContentReturnsBinaryData) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  mock_ptr->enqueue_response(HttpResponse{200, { {"Content-Type", "application/octet-stream"} }, std::string("data")});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  auto content = client.files().content("file-123");
+  ASSERT_EQ(content.data.size(), 4u);
+  EXPECT_EQ(std::string(content.data.begin(), content.data.end()), "data");
+  ASSERT_TRUE(content.headers.count("Content-Type"));
+  EXPECT_EQ(content.headers.at("Content-Type"), "application/octet-stream");
+
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  EXPECT_NE(mock_ptr->last_request()->url.find("/files/file-123/content"), std::string::npos);
 }

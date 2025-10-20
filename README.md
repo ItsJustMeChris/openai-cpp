@@ -13,7 +13,7 @@ This repository houses an in-progress native C++ port of the official `openai-no
 - ✅ `ChatResource` with non-streaming `/chat/completions` support
 - ✅ `ModerationsResource` for text/image classification
 - ✅ `ResponsesResource` (non-streaming create/retrieve/list/delete/cancel)
-- ✅ `FilesResource` (list/retrieve/delete metadata)
+- ✅ `FilesResource` (list/retrieve/create/delete/content for basic uploads)
 - 🚧 Additional endpoints (Chat, Responses, Files, etc.) to be implemented
 - 🚧 Streaming helpers, pagination helpers, and beta resources still pending
 
