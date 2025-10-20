@@ -16,6 +16,7 @@ add_library(openai-cpp
     src/chat.cpp
     src/moderations.cpp
     src/responses.cpp
+    src/files.cpp
 )
 
 target_include_directories(openai-cpp

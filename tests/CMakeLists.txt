@@ -15,6 +15,7 @@ target_compile_definitions(test_support INTERFACE
 
 add_executable(openai-cpp-tests
     ${CMAKE_CURRENT_LIST_DIR}/responses_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/files_test.cpp
 )
 
 target_link_libraries(openai-cpp-tests PRIVATE

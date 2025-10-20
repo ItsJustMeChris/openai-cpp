@@ -301,6 +301,7 @@ OpenAIClient::OpenAIClient(ClientOptions options,
       embeddings_(*this),
       moderations_(*this),
       responses_(*this),
+      files_(*this),
       chat_(*this) {
   if (options_.api_key.empty()) {
     throw OpenAIError("ClientOptions.api_key must be set");

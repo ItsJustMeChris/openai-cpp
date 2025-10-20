@@ -14,6 +14,7 @@
 #include "openai/chat.hpp"
 #include "openai/moderations.hpp"
 #include "openai/responses.hpp"
+#include "openai/files.hpp"
 
 namespace openai {
 
@@ -113,6 +114,9 @@ public:
   ResponsesResource& responses() { return responses_; }
   const ResponsesResource& responses() const { return responses_; }
 
+  FilesResource& files() { return files_; }
+  const FilesResource& files() const { return files_; }
+
   ChatResource& chat() { return chat_; }
   const ChatResource& chat() const { return chat_; }
 
@@ -125,6 +129,7 @@ private:
   friend class EmbeddingsResource;
   friend class ModerationsResource;
   friend class ResponsesResource;
+  friend class FilesResource;
   friend class ChatCompletionsResource;
 
   HttpResponse perform_request(const std::string& method,
@@ -141,6 +146,7 @@ private:
   EmbeddingsResource embeddings_;
   ModerationsResource moderations_;
   ResponsesResource responses_;
+  FilesResource files_;
   ChatResource chat_;
 };
 
