@@ -30,21 +30,91 @@ json build_request_body(const ResponseRequest& request) {
   for (const auto& item : request.input) {
     json message;
     message["role"] = item.role;
+    if (!item.metadata.empty()) {
+      message["metadata"] = item.metadata;
+    }
+
     json content = json::array();
     for (const auto& piece : item.content) {
       json content_item;
-      content_item["type"] = "input_text";
-      content_item["text"] = piece.text;
-      content.push_back(content_item);
+      switch (piece.type) {
+        case ResponseInputContent::Type::Text:
+          content_item["type"] = "input_text";
+          content_item["text"] = piece.text;
+          break;
+        case ResponseInputContent::Type::Image:
+          content_item["type"] = "input_image";
+          if (!piece.image_url.empty()) content_item["image_url"] = piece.image_url;
+          if (!piece.image_detail.empty()) content_item["detail"] = piece.image_detail;
+          if (!piece.file_id.empty()) content_item["file_id"] = piece.file_id;
+          break;
+        case ResponseInputContent::Type::File:
+          content_item["type"] = "input_file";
+          if (!piece.file_id.empty()) content_item["file_id"] = piece.file_id;
+          if (!piece.file_url.empty()) content_item["file_url"] = piece.file_url;
+          if (!piece.filename.empty()) content_item["filename"] = piece.filename;
+          break;
+        case ResponseInputContent::Type::Audio:
+          content_item["type"] = "input_audio";
+          if (!piece.audio_data.empty()) content_item["audio"] = { {"data", piece.audio_data}, {"format", piece.audio_format} };
+          break;
+        case ResponseInputContent::Type::Raw:
+          content_item = piece.raw;
+          break;
+      }
+      if (piece.type != ResponseInputContent::Type::Raw) {
+        for (auto it = piece.raw.begin(); it != piece.raw.end(); ++it) {
+          content_item[it.key()] = it.value();
+        }
+      }
+      content.push_back(std::move(content_item));
     }
     message["content"] = std::move(content);
     input.push_back(std::move(message));
   }
   body["input"] = std::move(input);
 
-  if (!request.metadata.empty()) {
-    body["metadata"] = request.metadata;
+  if (request.background) body["background"] = *request.background;
+  if (request.conversation_id) body["conversation"] = *request.conversation_id;
+  if (!request.include.empty()) body["include"] = request.include;
+  if (request.instructions) body["instructions"] = *request.instructions;
+  if (request.max_output_tokens) body["max_output_tokens"] = *request.max_output_tokens;
+  if (request.parallel_tool_calls) body["parallel_tool_calls"] = *request.parallel_tool_calls;
+  if (request.previous_response_id) body["previous_response_id"] = *request.previous_response_id;
+  if (request.prompt) {
+    json prompt;
+    prompt["id"] = request.prompt->id;
+    if (!request.prompt->variables.empty()) prompt["variables"] = request.prompt->variables;
+    for (auto it = request.prompt->extra.begin(); it != request.prompt->extra.end(); ++it) {
+      prompt[it.key()] = it.value();
+    }
+    body["prompt"] = std::move(prompt);
   }
+  if (request.prompt_cache_key) body["prompt_cache_key"] = *request.prompt_cache_key;
+  if (request.reasoning) {
+    json reasoning;
+    if (request.reasoning->effort) reasoning["effort"] = *request.reasoning->effort;
+    for (auto it = request.reasoning->extra.begin(); it != request.reasoning->extra.end(); ++it) {
+      reasoning[it.key()] = it.value();
+    }
+    body["reasoning"] = std::move(reasoning);
+  }
+  if (request.safety_identifier) body["safety_identifier"] = *request.safety_identifier;
+  if (request.service_tier) body["service_tier"] = *request.service_tier;
+  if (request.store) body["store"] = *request.store;
+  if (request.stream) body["stream"] = *request.stream;
+  if (request.stream_options) {
+    json stream_options;
+    if (request.stream_options->include_usage) stream_options["include_usage"] = *request.stream_options->include_usage;
+    for (auto it = request.stream_options->extra.begin(); it != request.stream_options->extra.end(); ++it) {
+      stream_options[it.key()] = it.value();
+    }
+    body["stream_options"] = std::move(stream_options);
+  }
+  if (request.temperature) body["temperature"] = *request.temperature;
+  if (request.top_p) body["top_p"] = *request.top_p;
+  if (!request.tools.empty()) body["tools"] = request.tools;
+  if (request.tool_choice) body["tool_choice"] = *request.tool_choice;
 
   ensure_model_present(body);
   return body;

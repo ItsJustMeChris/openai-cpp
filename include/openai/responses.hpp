@@ -39,18 +39,65 @@ struct Response {
 };
 
 struct ResponseInputContent {
+  enum class Type { Text, Image, File, Audio, Raw };
+
+  Type type = Type::Text;
   std::string text;
+  std::string image_url;
+  std::string image_detail;
+  std::string file_id;
+  std::string file_url;
+  std::string filename;
+  std::string audio_data;
+  std::string audio_format;
+  nlohmann::json raw = nlohmann::json::object();
 };
 
 struct ResponseInput {
   std::string role;
   std::vector<ResponseInputContent> content;
+  std::map<std::string, std::string> metadata;
+};
+
+struct ResponsePrompt {
+  std::string id;
+  std::map<std::string, std::string> variables;
+  nlohmann::json extra = nlohmann::json::object();
+};
+
+struct ResponseReasoningConfig {
+  std::optional<std::string> effort;
+  nlohmann::json extra = nlohmann::json::object();
+};
+
+struct ResponseStreamOptions {
+  std::optional<bool> include_usage;
+  nlohmann::json extra = nlohmann::json::object();
 };
 
 struct ResponseRequest {
   std::string model;
   std::vector<ResponseInput> input;
   std::map<std::string, std::string> metadata;
+  std::optional<bool> background;
+  std::optional<std::string> conversation_id;
+  std::vector<std::string> include;
+  std::optional<std::string> instructions;
+  std::optional<int> max_output_tokens;
+  std::optional<bool> parallel_tool_calls;
+  std::optional<std::string> previous_response_id;
+  std::optional<ResponsePrompt> prompt;
+  std::optional<std::string> prompt_cache_key;
+  std::optional<ResponseReasoningConfig> reasoning;
+  std::optional<std::string> safety_identifier;
+  std::optional<std::string> service_tier;
+  std::optional<bool> store;
+  std::optional<bool> stream;
+  std::optional<ResponseStreamOptions> stream_options;
+  std::optional<double> temperature;
+  std::optional<double> top_p;
+  std::vector<nlohmann::json> tools;
+  std::optional<nlohmann::json> tool_choice;
 };
 
 struct ResponseRetrieveOptions {
