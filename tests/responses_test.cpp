@@ -47,7 +47,11 @@ TEST(ResponsesResourceTest, ParsesOutputTextAndUsage) {
   OpenAIClient client(options, std::move(mock_client));
 
   ResponseRequest request;
-  request.body = json{{"model", "gpt-4o-mini"}, {"input", json::array()}};
+  request.model = "gpt-4o-mini";
+  ResponseInput input;
+  input.role = "user";
+  input.content.push_back(ResponseInputContent{.text = "Say hello"});
+  request.input.push_back(std::move(input));
 
   auto response = client.responses().create(request);
 
@@ -131,7 +135,11 @@ TEST(ResponsesResourceTest, CreateStreamParsesEvents) {
   OpenAIClient client(options, std::move(mock_client));
 
   ResponseRequest request;
-  request.body = json{{"model", "gpt-4o"}, {"input", json::array()}};
+  request.model = "gpt-4o";
+  ResponseInput input;
+  input.role = "user";
+  input.content.push_back(ResponseInputContent{.text = "Stream please"});
+  request.input.push_back(std::move(input));
 
   auto events = client.responses().create_stream(request);
   ASSERT_EQ(events.size(), 1u);

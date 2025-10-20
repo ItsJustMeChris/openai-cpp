@@ -376,23 +376,25 @@ VectorStoreSearchResults VectorStoresResource::search(const std::string& vector_
   RequestOptions request_options = options;
   apply_beta_header(request_options);
 
-  json body = request.extra.is_null() ? json::object() : request.extra;
-  if (!body.is_object()) {
-    throw OpenAIError("VectorStoreSearchRequest.extra must be an object");
-  }
+  json body;
   if (request.query.size() == 1) {
     body["query"] = request.query.front();
   } else {
     body["query"] = request.query;
   }
-  if (!request.filters.empty()) {
-    body["filters"] = request.filters;
+  if (request.metadata_filter) {
+    body["filters"] = *request.metadata_filter;
   }
   if (request.max_num_results) {
     body["max_num_results"] = *request.max_num_results;
   }
   if (request.ranking_options) {
-    body["ranking_options"] = *request.ranking_options;
+    json ranking;
+    ranking["ranker"] = request.ranking_options->ranker;
+    if (request.ranking_options->score_threshold) {
+      ranking["score_threshold"] = *request.ranking_options->score_threshold;
+    }
+    body["ranking_options"] = std::move(ranking);
   }
   if (request.rewrite_query) {
     body["rewrite_query"] = *request.rewrite_query;

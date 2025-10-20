@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -37,8 +38,19 @@ struct Response {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct ResponseInputContent {
+  std::string text;
+};
+
+struct ResponseInput {
+  std::string role;
+  std::vector<ResponseInputContent> content;
+};
+
 struct ResponseRequest {
-  nlohmann::json body = nlohmann::json::object();
+  std::string model;
+  std::vector<ResponseInput> input;
+  std::map<std::string, std::string> metadata;
 };
 
 struct ResponseRetrieveOptions {

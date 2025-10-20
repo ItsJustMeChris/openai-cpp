@@ -64,11 +64,14 @@ struct VectorStoreFileDeleteResponse {
 
 struct VectorStoreSearchRequest {
   std::vector<std::string> query;
-  nlohmann::json filters = nlohmann::json::object();
+  std::optional<std::map<std::string, std::string>> metadata_filter;
   std::optional<int> max_num_results;
-  std::optional<nlohmann::json> ranking_options;
+  struct RankingOptions {
+    std::string ranker = "auto";
+    std::optional<double> score_threshold;
+  };
+  std::optional<RankingOptions> ranking_options;
   std::optional<bool> rewrite_query;
-  nlohmann::json extra = nlohmann::json::object();
 };
 
 struct VectorStoreSearchResult {

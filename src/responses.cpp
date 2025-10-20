@@ -23,10 +23,29 @@ void ensure_model_present(const json& body) {
 }
 
 json build_request_body(const ResponseRequest& request) {
-  if (!request.body.is_object()) {
-    throw OpenAIError("ResponseRequest.body must be a JSON object");
+  json body = json::object();
+  body["model"] = request.model;
+
+  json input = json::array();
+  for (const auto& item : request.input) {
+    json message;
+    message["role"] = item.role;
+    json content = json::array();
+    for (const auto& piece : item.content) {
+      json content_item;
+      content_item["type"] = "input_text";
+      content_item["text"] = piece.text;
+      content.push_back(content_item);
+    }
+    message["content"] = std::move(content);
+    input.push_back(std::move(message));
   }
-  json body = request.body;
+  body["input"] = std::move(input);
+
+  if (!request.metadata.empty()) {
+    body["metadata"] = request.metadata;
+  }
+
   ensure_model_present(body);
   return body;
 }

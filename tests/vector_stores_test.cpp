@@ -273,6 +273,11 @@ TEST(VectorStoresResourceTest, SearchReturnsResults) {
 
   VectorStoreSearchRequest request;
   request.query = {"hello"};
+  request.metadata_filter = std::map<std::string, std::string>{{"project", "demo"}};
+  VectorStoreSearchRequest::RankingOptions ranking;
+  ranking.ranker = "auto";
+  ranking.score_threshold = 0.5;
+  request.ranking_options = ranking;
 
   auto results = client.vector_stores().search("vs_123", request);
   ASSERT_EQ(results.data.size(), 1u);
