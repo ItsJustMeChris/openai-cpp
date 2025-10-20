@@ -10,6 +10,7 @@
 #include "openai/http_client.hpp"
 #include "openai/error.hpp"
 #include "openai/models.hpp"
+#include "openai/embeddings.hpp"
 
 namespace openai {
 
@@ -55,6 +56,17 @@ private:
   OpenAIClient& client_;
 };
 
+class EmbeddingsResource {
+public:
+  explicit EmbeddingsResource(OpenAIClient& client) : client_(client) {}
+
+  CreateEmbeddingResponse create(const EmbeddingRequest& request,
+                                 const RequestOptions& options = {}) const;
+
+private:
+  OpenAIClient& client_;
+};
+
 class OpenAIClient {
 public:
   explicit OpenAIClient(ClientOptions options,
@@ -68,12 +80,16 @@ public:
   ModelsResource& models() { return models_; }
   const ModelsResource& models() const { return models_; }
 
+  EmbeddingsResource& embeddings() { return embeddings_; }
+  const EmbeddingsResource& embeddings() const { return embeddings_; }
+
   Completion create_completion(const CompletionRequest& request,
                                const RequestOptions& options = {});
 
 private:
   friend class CompletionsResource;
   friend class ModelsResource;
+  friend class EmbeddingsResource;
 
   HttpResponse perform_request(const std::string& method,
                                const std::string& path,
@@ -84,6 +100,7 @@ private:
   std::unique_ptr<HttpClient> http_client_;
   CompletionsResource completions_;
   ModelsResource models_;
+  EmbeddingsResource embeddings_;
 };
 
 }  // namespace openai

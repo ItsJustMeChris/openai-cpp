@@ -7,6 +7,11 @@
 
 #include <utility>
 #include <stdexcept>
+#include <variant>
+#include <cstdint>
+#include <cstring>
+
+#include "openai/utils/base64.hpp"
 
 namespace openai {
 namespace {
@@ -38,6 +43,30 @@ json completion_request_to_json(const CompletionRequest& request) {
   return body;
 }
 
+json embedding_input_to_json(const EmbeddingRequest::Input& input) {
+  return std::visit(
+      [](const auto& value) -> json {
+        return json(value);
+      },
+      input);
+}
+
+json embedding_request_to_json(const EmbeddingRequest& request) {
+  json body;
+  body["model"] = request.model;
+  body["input"] = embedding_input_to_json(request.input);
+  if (request.dimensions) {
+    body["dimensions"] = *request.dimensions;
+  }
+  if (request.encoding_format) {
+    body["encoding_format"] = *request.encoding_format;
+  }
+  if (request.user) {
+    body["user"] = *request.user;
+  }
+  return body;
+}
+
 Completion parse_completion(const json& payload) {
   Completion completion;
   completion.id = payload.value("id", "");
@@ -65,6 +94,73 @@ Completion parse_completion(const json& payload) {
   }
 
   return completion;
+}
+
+std::vector<float> bytes_to_float32(const std::vector<std::uint8_t>& bytes) {
+  if (bytes.size() % 4 != 0) {
+    throw OpenAIError("Embedding bytes length must be a multiple of 4");
+  }
+  std::vector<float> values(bytes.size() / 4);
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    std::uint32_t word = static_cast<std::uint32_t>(bytes[i * 4]) |
+                         (static_cast<std::uint32_t>(bytes[i * 4 + 1]) << 8) |
+                         (static_cast<std::uint32_t>(bytes[i * 4 + 2]) << 16) |
+                         (static_cast<std::uint32_t>(bytes[i * 4 + 3]) << 24);
+    float value;
+    std::memcpy(&value, &word, sizeof(float));
+    values[i] = value;
+  }
+  return values;
+}
+
+Embedding parse_embedding(const json& payload, bool decode_base64) {
+  Embedding embedding;
+  embedding.index = payload.value("index", 0);
+  embedding.object = payload.value("object", "");
+
+  const auto& data = payload.at("embedding");
+  if (decode_base64) {
+    if (!data.is_string()) {
+      throw OpenAIError("Expected base64 string for embedding data");
+    }
+    auto bytes = utils::decode_base64(data.get<std::string>());
+    embedding.embedding = bytes_to_float32(bytes);
+  } else {
+    if (data.is_string()) {
+      embedding.embedding = data.get<std::string>();
+    } else {
+      std::vector<float> values;
+      values.reserve(data.size());
+      for (const auto& item : data) {
+        values.push_back(static_cast<float>(item.get<double>()));
+      }
+      embedding.embedding = std::move(values);
+    }
+  }
+
+  return embedding;
+}
+
+CreateEmbeddingResponse parse_embedding_response(const json& payload, bool decode_base64) {
+  CreateEmbeddingResponse response;
+  response.model = payload.value("model", "");
+  response.object = payload.value("object", "");
+
+  if (payload.contains("data")) {
+    for (const auto& embedding_json : payload.at("data")) {
+      response.data.push_back(parse_embedding(embedding_json, decode_base64));
+    }
+  }
+
+  if (payload.contains("usage")) {
+    EmbeddingUsage usage;
+    const auto& usage_json = payload.at("usage");
+    usage.prompt_tokens = usage_json.value("prompt_tokens", 0);
+    usage.total_tokens = usage_json.value("total_tokens", 0);
+    response.usage = usage;
+  }
+
+  return response;
 }
 
 Model parse_model(const json& payload) {
@@ -133,7 +229,8 @@ OpenAIClient::OpenAIClient(ClientOptions options,
     : options_(std::move(options)),
       http_client_(http_client ? std::move(http_client) : make_default_http_client()),
       completions_(*this),
-      models_(*this) {
+      models_(*this),
+      embeddings_(*this) {
   if (options_.api_key.empty()) {
     throw OpenAIError("ClientOptions.api_key must be set");
   }
@@ -236,6 +333,26 @@ ModelDeleted ModelsResource::Delete(const std::string& model_id, const RequestOp
     return parse_model_deleted(payload);
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse model deletion response: ") + ex.what());
+  }
+}
+
+CreateEmbeddingResponse EmbeddingsResource::create(const EmbeddingRequest& request,
+                                                   const RequestOptions& options) const {
+  const bool has_user_encoding = request.encoding_format.has_value();
+  EmbeddingRequest request_body = request;
+  if (!request_body.encoding_format) {
+    request_body.encoding_format = std::string("base64");
+  }
+
+  auto body = embedding_request_to_json(request_body).dump();
+  auto response = client_.perform_request("POST", "/embeddings", body, options);
+  try {
+    auto payload = json::parse(response.body);
+    const bool decode_base64 =
+        !has_user_encoding && request_body.encoding_format && *request_body.encoding_format == "base64";
+    return parse_embedding_response(payload, decode_base64);
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse embedding response: ") + ex.what());
   }
 }
 

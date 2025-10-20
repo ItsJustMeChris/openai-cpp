@@ -9,6 +9,7 @@ This repository houses an in-progress native C++ port of the official `openai-no
 - ✅ JSON serialization via the header-only [`nlohmann::json`](https://github.com/nlohmann/json) library (vendored locally)
 - ✅ `CompletionsResource` with strongly typed request/response models
 - ✅ `ModelsResource` supporting retrieve/list/delete operations
+- ✅ `EmbeddingsResource` with default base64 decoding to float vectors
 - 🚧 Additional endpoints (Chat, Responses, Files, etc.) to be implemented
 - 🚧 Streaming helpers, pagination helpers, and beta resources still pending
 

@@ -10,6 +10,7 @@ find_package(CURL REQUIRED)
 add_library(openai-cpp
     src/client.cpp
     src/http_client.cpp
+    src/utils/base64.cpp
 )
 
 target_include_directories(openai-cpp
@@ -31,4 +32,3 @@ add_executable(openai-cli apps/demo.cpp)
 target_link_libraries(openai-cli PRIVATE openai-cpp)
 
 target_include_directories(openai-cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external)
-

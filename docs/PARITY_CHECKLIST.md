@@ -33,7 +33,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [ ] Chat (`/chat.completions` and nested resources)
 - [ ] Responses (`/responses`)
 - [x] Models (retrieve/list/delete; pagination helpers pending)
-- [ ] Embeddings
+- [x] Embeddings (default base64 decode, float/base64 variants)
 - [ ] Files (list/upload/download/delete)
 - [ ] Images (generate/edit/variation + streaming events)
 - [ ] Audio (speech, transcription, translation)
