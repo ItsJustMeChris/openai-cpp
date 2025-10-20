@@ -19,6 +19,7 @@ add_library(openai-cpp
     src/files.cpp
     src/images.cpp
     src/audio.cpp
+    src/vector_stores.cpp
     src/streaming.cpp
 )
 
