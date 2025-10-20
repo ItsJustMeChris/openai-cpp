@@ -32,7 +32,8 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Completions (`/completions`)
 - [x] Chat completions (basic create)
 - [ ] Chat completions advanced features (streaming, stored completions, tool runners)
-- [ ] Responses (`/responses`)
+- [x] Responses (non-streaming create/retrieve/cancel/delete)
+- [ ] Responses advanced features (streaming, input items, tool runners)
 - [x] Models (retrieve/list/delete; pagination helpers pending)
 - [x] Embeddings (default base64 decode, float/base64 variants)
 - [x] Moderations (basic create)
@@ -52,6 +53,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 
 ## Tooling & Tests
 - [ ] Unit tests with mock HTTP client
+  - Mock transport scaffold in `tests/support/mock_http_client.hpp`
 - [ ] Integration test harness (opt-in, network-gated)
 - [ ] CI configuration
 - [ ] Packaging/distribution strategy (CMake install, pkg-config)

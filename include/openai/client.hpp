@@ -13,6 +13,7 @@
 #include "openai/embeddings.hpp"
 #include "openai/chat.hpp"
 #include "openai/moderations.hpp"
+#include "openai/responses.hpp"
 
 namespace openai {
 
@@ -101,6 +102,9 @@ public:
   ModerationsResource& moderations() { return moderations_; }
   const ModerationsResource& moderations() const { return moderations_; }
 
+  ResponsesResource& responses() { return responses_; }
+  const ResponsesResource& responses() const { return responses_; }
+
   ChatResource& chat() { return chat_; }
   const ChatResource& chat() const { return chat_; }
 
@@ -112,6 +116,7 @@ private:
   friend class ModelsResource;
   friend class EmbeddingsResource;
   friend class ModerationsResource;
+  friend class ResponsesResource;
   friend class ChatCompletionsResource;
 
   HttpResponse perform_request(const std::string& method,
@@ -125,6 +130,7 @@ private:
   ModelsResource models_;
   EmbeddingsResource embeddings_;
   ModerationsResource moderations_;
+  ResponsesResource responses_;
   ChatResource chat_;
 };
 

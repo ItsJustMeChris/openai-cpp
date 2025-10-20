@@ -12,6 +12,7 @@ This repository houses an in-progress native C++ port of the official `openai-no
 - ✅ `EmbeddingsResource` with default base64 decoding to float vectors
 - ✅ `ChatResource` with non-streaming `/chat/completions` support
 - ✅ `ModerationsResource` for text/image classification
+- ✅ `ResponsesResource` (non-streaming create/retrieve/delete/cancel)
 - 🚧 Additional endpoints (Chat, Responses, Files, etc.) to be implemented
 - 🚧 Streaming helpers, pagination helpers, and beta resources still pending
 
@@ -29,7 +30,7 @@ export OPENAI_API_KEY="sk-..."
 ./build/apps/openai-cli
 ```
 
-Network calls are disabled in automated tests by default; consider providing a mock `HttpClient` when writing unit tests. The TypeScript SDK runs its suite against a Prism-powered mock server on `127.0.0.1:4010`; mirroring that setup (or faking the `HttpClient`) will keep parity as the surface grows.
+Network calls are disabled in automated tests by default; consider providing a mock `HttpClient` when writing unit tests. The TypeScript SDK runs its suite against a Prism-powered mock server on `127.0.0.1:4010`; mirroring that setup (or faking the `HttpClient`) will keep parity as the surface grows. See `docs/TESTING.md` for the evolving test plan.
 
 The vendored copy of `nlohmann::json` is licensed under MIT; see `external/nlohmann/LICENSE.MIT`.
 

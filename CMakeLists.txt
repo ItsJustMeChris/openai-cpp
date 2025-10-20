@@ -13,6 +13,7 @@ add_library(openai-cpp
     src/utils/base64.cpp
     src/chat.cpp
     src/moderations.cpp
+    src/responses.cpp
 )
 
 target_include_directories(openai-cpp
