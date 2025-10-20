@@ -29,24 +29,37 @@ struct ImageGenerateRequest {
   std::optional<int> n;
   std::optional<std::string> size;
   std::optional<std::string> response_format;
-  nlohmann::json extra = nlohmann::json::object();
+  std::optional<std::string> quality;
+  std::optional<std::string> style;
+  std::optional<std::string> background;
+  std::optional<std::string> user;
 };
 
 struct ImageVariationRequest {
   FileUploadRequest image;
+  std::optional<std::string> model;
   std::optional<std::string> prompt;
   std::optional<int> n;
   std::optional<std::string> size;
   std::optional<std::string> response_format;
+  std::optional<std::string> quality;
+  std::optional<std::string> style;
+  std::optional<std::string> background;
+  std::optional<std::string> user;
 };
 
 struct ImageEditRequest {
   FileUploadRequest image;
   std::optional<FileUploadRequest> mask;
+  std::optional<std::string> model;
   std::optional<std::string> prompt;
   std::optional<int> n;
   std::optional<std::string> size;
   std::optional<std::string> response_format;
+  std::optional<std::string> quality;
+  std::optional<std::string> style;
+  std::optional<std::string> background;
+  std::optional<std::string> user;
 };
 
 struct RequestOptions;
@@ -70,4 +83,3 @@ private:
 };
 
 }  // namespace openai
-

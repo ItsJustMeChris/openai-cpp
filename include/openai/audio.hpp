@@ -29,7 +29,14 @@ struct TranscriptionRequest {
   std::string model;
   std::optional<std::string> response_format;
   std::optional<std::string> language;
-  nlohmann::json extra = nlohmann::json::object();
+  std::optional<std::string> prompt;
+  std::optional<double> temperature;
+  std::optional<std::vector<std::string>> timestamp_granularities;
+  std::optional<bool> logprobs;
+  std::optional<int> max_alternatives;
+  std::optional<bool> profanity_filter;
+  std::optional<bool> remove_background;
+  std::optional<bool> speaker_labels;
 };
 
 struct TranslationResponse {
@@ -43,7 +50,6 @@ struct TranslationRequest {
   std::optional<std::string> prompt;
   std::optional<std::string> response_format;
   std::optional<double> temperature;
-  nlohmann::json extra = nlohmann::json::object();
 };
 
 struct SpeechResponse {
@@ -59,7 +65,6 @@ struct SpeechRequest {
   std::optional<std::string> response_format;
   std::optional<double> speed;
   std::optional<std::string> stream_format;
-  nlohmann::json extra = nlohmann::json::object();
 };
 
 struct RequestOptions;
@@ -123,3 +128,4 @@ private:
 };
 
 }  // namespace openai
+

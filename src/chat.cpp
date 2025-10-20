@@ -15,37 +15,59 @@ namespace {
 using json = nlohmann::json;
 
 json message_content_to_json(const ChatMessageContent& content) {
-  json block = content.data.is_null() ? json::object() : content.data;
-  if (!block.is_object()) {
-    block = json::object();
+  json block = json::object();
+  switch (content.type) {
+    case ChatMessageContent::Type::Text:
+      block["type"] = "text";
+      block["text"] = content.text;
+      break;
+    case ChatMessageContent::Type::Image:
+      block["type"] = "input_image";
+      if (!content.image_url.empty()) block["image_url"] = content.image_url;
+      if (!content.image_detail.empty()) block["detail"] = content.image_detail;
+      if (!content.file_id.empty()) block["file_id"] = content.file_id;
+      break;
+    case ChatMessageContent::Type::File:
+      block["type"] = "input_file";
+      if (!content.file_id.empty()) block["file_id"] = content.file_id;
+      if (!content.file_url.empty()) block["file_url"] = content.file_url;
+      if (!content.filename.empty()) block["filename"] = content.filename;
+      break;
+    case ChatMessageContent::Type::Audio:
+      block["type"] = "input_audio";
+      if (!content.audio_data.empty()) block["audio"] = { {"data", content.audio_data}, {"format", content.audio_format} };
+      break;
+    case ChatMessageContent::Type::Raw:
+      block = content.raw.is_null() ? json::object() : content.raw;
+      break;
   }
-  block["type"] = content.type;
-  if (content.text) {
-    block["text"] = *content.text;
+  if (!content.raw.is_null() && content.type != ChatMessageContent::Type::Raw) {
+    for (auto it = content.raw.begin(); it != content.raw.end(); ++it) {
+      block[it.key()] = it.value();
+    }
   }
   return block;
 }
 
 json message_to_json(const ChatMessage& message) {
-  json result = message.extra_fields.is_null() ? json::object() : message.extra_fields;
-  if (!result.is_object()) {
-    throw OpenAIError("ChatMessage.extra_fields must be an object");
+  json result;
+  result["role"] = message.role;
+  if (message.name) {
+    result["name"] = *message.name;
+  }
+  if (!message.metadata.empty()) {
+    result["metadata"] = message.metadata;
   }
 
-  result["role"] = message.role;
-
-  if (std::holds_alternative<std::string>(message.content)) {
-    result["content"] = std::get<std::string>(message.content);
-  } else if (std::holds_alternative<std::vector<ChatMessageContent>>(message.content)) {
+  if (message.content.size() == 1 && message.content.front().type == ChatMessageContent::Type::Text &&
+      message.metadata.empty() && message.tool_calls.empty()) {
+    result["content"] = message.content.front().text;
+  } else if (!message.content.empty()) {
     json content_array = json::array();
-    for (const auto& block : std::get<std::vector<ChatMessageContent>>(message.content)) {
+    for (const auto& block : message.content) {
       content_array.push_back(message_content_to_json(block));
     }
     result["content"] = std::move(content_array);
-  }
-
-  if (message.name) {
-    result["name"] = *message.name;
   }
 
   if (!message.tool_calls.empty()) {
@@ -69,10 +91,6 @@ json message_to_json(const ChatMessage& message) {
     result["tool_calls"] = std::move(tool_calls);
   }
 
-  if (!message.metadata.is_null() && !message.metadata.empty()) {
-    result["metadata"] = message.metadata;
-  }
-
   return result;
 }
 
@@ -89,10 +107,34 @@ ChatCompletionToolCall parse_tool_call(const json& payload) {
 
 ChatMessageContent parse_message_content(const json& payload) {
   ChatMessageContent content;
-  content.data = payload;
-  content.type = payload.value("type", "");
-  if (payload.contains("text") && payload["text"].is_string()) {
-    content.text = payload["text"].get<std::string>();
+  content.raw = payload;
+  std::string type = payload.value("type", "text");
+  if (type == "text" && payload.contains("text")) {
+    content.type = ChatMessageContent::Type::Text;
+    if (payload["text"].is_string()) {
+      content.text = payload["text"].get<std::string>();
+    } else if (payload["text"].is_object()) {
+      content.text = payload["text"].value("content", payload["text"].value("value", ""));
+    }
+  } else if (type == "input_image" || type == "image_url") {
+    content.type = ChatMessageContent::Type::Image;
+    content.image_url = payload.value("image_url", "");
+    content.image_detail = payload.value("detail", "");
+    content.file_id = payload.value("file_id", "");
+  } else if (type == "input_file") {
+    content.type = ChatMessageContent::Type::File;
+    content.file_id = payload.value("file_id", "");
+    content.file_url = payload.value("file_url", "");
+    content.filename = payload.value("filename", "");
+  } else if (type == "input_audio") {
+    content.type = ChatMessageContent::Type::Audio;
+    if (payload.contains("audio") && payload["audio"].is_object()) {
+      const auto& audio = payload.at("audio");
+      content.audio_data = audio.value("data", "");
+      content.audio_format = audio.value("format", "");
+    }
+  } else {
+    content.type = ChatMessageContent::Type::Raw;
   }
   return content;
 }
@@ -100,26 +142,30 @@ ChatMessageContent parse_message_content(const json& payload) {
 ChatMessage parse_message(const json& payload) {
   ChatMessage message;
   message.raw = payload;
-  message.extra_fields = json::object();
 
   message.role = payload.value("role", "");
   if (payload.contains("name") && payload["name"].is_string()) {
     message.name = payload["name"].get<std::string>();
   }
-  if (payload.contains("metadata")) {
-    message.metadata = payload.at("metadata");
+  if (payload.contains("metadata") && payload["metadata"].is_object()) {
+    for (auto it = payload["metadata"].begin(); it != payload["metadata"].end(); ++it) {
+      if (it.value().is_string()) {
+        message.metadata[it.key()] = it.value().get<std::string>();
+      }
+    }
   }
 
   if (payload.contains("content")) {
     const auto& content = payload.at("content");
     if (content.is_string()) {
-      message.content = content.get<std::string>();
+      ChatMessageContent item;
+      item.type = ChatMessageContent::Type::Text;
+      item.text = content.get<std::string>();
+      message.content.push_back(std::move(item));
     } else if (content.is_array()) {
-      std::vector<ChatMessageContent> blocks;
       for (const auto& block_json : content) {
-        blocks.push_back(parse_message_content(block_json));
+        message.content.push_back(parse_message_content(block_json));
       }
-      message.content = std::move(blocks);
     }
   }
 
@@ -189,11 +235,7 @@ ChatCompletion ChatCompletionsResource::create(const ChatCompletionRequest& requ
 
 ChatCompletion ChatCompletionsResource::create(const ChatCompletionRequest& request,
                                                const RequestOptions& options) const {
-  json body = request.extra_params.is_null() ? json::object() : request.extra_params;
-  if (!body.is_object()) {
-    throw OpenAIError("ChatCompletionRequest.extra_params must be an object");
-  }
-
+  json body;
   body["model"] = request.model;
 
   json messages = json::array();
@@ -202,9 +244,60 @@ ChatCompletion ChatCompletionsResource::create(const ChatCompletionRequest& requ
   }
   body["messages"] = std::move(messages);
 
-  if (request.stream.has_value()) {
-    body["stream"] = *request.stream;
+  if (!request.metadata.empty()) body["metadata"] = request.metadata;
+  if (request.max_tokens) body["max_tokens"] = *request.max_tokens;
+  if (request.temperature) body["temperature"] = *request.temperature;
+  if (request.top_p) body["top_p"] = *request.top_p;
+  if (request.frequency_penalty) body["frequency_penalty"] = *request.frequency_penalty;
+  if (request.presence_penalty) body["presence_penalty"] = *request.presence_penalty;
+  if (!request.logit_bias.empty()) body["logit_bias"] = request.logit_bias;
+  if (request.logprobs) body["logprobs"] = *request.logprobs;
+  if (request.top_logprobs) body["top_logprobs"] = *request.top_logprobs;
+  if (request.stop && !request.stop->empty()) body["stop"] = *request.stop;
+  if (request.seed) body["seed"] = *request.seed;
+  if (request.response_format) {
+    json format;
+    format["type"] = request.response_format->type;
+    if (!request.response_format->json_schema.is_null() && !request.response_format->json_schema.empty()) {
+      format["json_schema"] = request.response_format->json_schema;
+    }
+    body["response_format"] = std::move(format);
   }
+  if (!request.tools.empty()) {
+    json tools = json::array();
+    for (const auto& tool : request.tools) {
+      json tool_json;
+      tool_json["type"] = tool.type;
+      if (tool.function) {
+        json fn;
+        fn["name"] = tool.function->name;
+        if (tool.function->description) fn["description"] = *tool.function->description;
+        if (!tool.function->parameters.is_null() && !tool.function->parameters.empty()) {
+          fn["parameters"] = tool.function->parameters;
+        }
+        tool_json["function"] = std::move(fn);
+      }
+      for (auto it = tool.raw.begin(); it != tool.raw.end(); ++it) {
+        tool_json[it.key()] = it.value();
+      }
+      tools.push_back(std::move(tool_json));
+    }
+    body["tools"] = std::move(tools);
+  }
+  if (request.tool_choice) {
+    json choice;
+    choice["type"] = request.tool_choice->type;
+    if (request.tool_choice->function_name) {
+      choice["function"] = { {"name", *request.tool_choice->function_name} };
+    }
+    for (auto it = request.tool_choice->raw.begin(); it != request.tool_choice->raw.end(); ++it) {
+      choice[it.key()] = it.value();
+    }
+    body["tool_choice"] = std::move(choice);
+  }
+  if (request.parallel_tool_calls) body["parallel_tool_calls"] = *request.parallel_tool_calls;
+  if (request.user) body["user"] = *request.user;
+  if (request.stream) body["stream"] = *request.stream;
 
   auto response = client_.perform_request("POST", "/chat/completions", body.dump(), options);
   try {
@@ -217,11 +310,7 @@ ChatCompletion ChatCompletionsResource::create(const ChatCompletionRequest& requ
 
 std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCompletionRequest& request,
                                                                     const RequestOptions& options) const {
-  json body = request.extra_params.is_null() ? json::object() : request.extra_params;
-  if (!body.is_object()) {
-    throw OpenAIError("ChatCompletionRequest.extra_params must be an object");
-  }
-
+  json body;
   body["model"] = request.model;
 
   json messages = json::array();
@@ -230,6 +319,60 @@ std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCo
   }
   body["messages"] = std::move(messages);
   body["stream"] = true;
+
+  if (!request.metadata.empty()) body["metadata"] = request.metadata;
+  if (request.max_tokens) body["max_tokens"] = *request.max_tokens;
+  if (request.temperature) body["temperature"] = *request.temperature;
+  if (request.top_p) body["top_p"] = *request.top_p;
+  if (request.frequency_penalty) body["frequency_penalty"] = *request.frequency_penalty;
+  if (request.presence_penalty) body["presence_penalty"] = *request.presence_penalty;
+  if (!request.logit_bias.empty()) body["logit_bias"] = request.logit_bias;
+  if (request.logprobs) body["logprobs"] = *request.logprobs;
+  if (request.top_logprobs) body["top_logprobs"] = *request.top_logprobs;
+  if (request.stop && !request.stop->empty()) body["stop"] = *request.stop;
+  if (request.seed) body["seed"] = *request.seed;
+  if (request.response_format) {
+    json format;
+    format["type"] = request.response_format->type;
+    if (!request.response_format->json_schema.is_null() && !request.response_format->json_schema.empty()) {
+      format["json_schema"] = request.response_format->json_schema;
+    }
+    body["response_format"] = std::move(format);
+  }
+  if (!request.tools.empty()) {
+    json tools = json::array();
+    for (const auto& tool : request.tools) {
+      json tool_json;
+      tool_json["type"] = tool.type;
+      if (tool.function) {
+        json fn;
+        fn["name"] = tool.function->name;
+        if (tool.function->description) fn["description"] = *tool.function->description;
+        if (!tool.function->parameters.is_null() && !tool.function->parameters.empty()) {
+          fn["parameters"] = tool.function->parameters;
+        }
+        tool_json["function"] = std::move(fn);
+      }
+      for (auto it = tool.raw.begin(); it != tool.raw.end(); ++it) {
+        tool_json[it.key()] = it.value();
+      }
+      tools.push_back(std::move(tool_json));
+    }
+    body["tools"] = std::move(tools);
+  }
+  if (request.tool_choice) {
+    json choice;
+    choice["type"] = request.tool_choice->type;
+    if (request.tool_choice->function_name) {
+      choice["function"] = { {"name", *request.tool_choice->function_name} };
+    }
+    for (auto it = request.tool_choice->raw.begin(); it != request.tool_choice->raw.end(); ++it) {
+      choice[it.key()] = it.value();
+    }
+    body["tool_choice"] = std::move(choice);
+  }
+  if (request.parallel_tool_calls) body["parallel_tool_calls"] = *request.parallel_tool_calls;
+  if (request.user) body["user"] = *request.user;
 
   RequestOptions request_options = options;
   request_options.headers["Accept"] = "text/event-stream";

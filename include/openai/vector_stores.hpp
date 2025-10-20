@@ -3,17 +3,32 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
 namespace openai {
 
+struct VectorStoreFileCounts {
+  int cancelled = 0;
+  int completed = 0;
+  int failed = 0;
+  int in_progress = 0;
+  int total = 0;
+};
+
 struct VectorStore {
   std::string id;
-  std::string name;
+  std::optional<std::string> name;
   std::string object;
   int created_at = 0;
+  std::optional<std::string> description;
+  std::optional<int> usage_bytes;
+  std::optional<int> last_active_at;
+  std::optional<VectorStoreFileCounts> file_counts;
+  std::optional<std::string> status;
+  std::optional<int> expires_at;
   std::map<std::string, std::string> metadata;
   nlohmann::json raw = nlohmann::json::object();
 };
@@ -40,7 +55,6 @@ struct VectorStoreFileList {
 
 struct VectorStoreFileCreateRequest {
   std::string file_id;
-  nlohmann::json extra = nlohmann::json::object();
 };
 
 struct VectorStoreFileBatch {
@@ -51,9 +65,27 @@ struct VectorStoreFileBatch {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct VectorStoreExpiresAfter {
+  std::string anchor;
+  int days = 0;
+};
+
+struct VectorStoreChunkingStrategy {
+  enum class Type {
+    Auto,
+    Static
+  };
+  Type type = Type::Auto;
+  std::optional<int> max_chunk_size_tokens;
+  std::optional<int> chunk_overlap_tokens;
+};
+
+using AttributeValue = std::variant<std::string, double, bool>;
+
 struct VectorStoreFileBatchCreateRequest {
   std::vector<std::string> file_ids;
-  nlohmann::json extra = nlohmann::json::object();
+  std::map<std::string, AttributeValue> attributes;
+  std::optional<VectorStoreChunkingStrategy> chunking_strategy;
 };
 
 struct VectorStoreFileDeleteResponse {
@@ -64,7 +96,7 @@ struct VectorStoreFileDeleteResponse {
 
 struct VectorStoreSearchRequest {
   std::vector<std::string> query;
-  std::optional<std::map<std::string, std::string>> metadata_filter;
+  std::optional<std::map<std::string, AttributeValue>> metadata_filter;
   std::optional<int> max_num_results;
   struct RankingOptions {
     std::string ranker = "auto";
@@ -89,15 +121,18 @@ struct VectorStoreSearchResults {
 };
 
 struct VectorStoreCreateRequest {
-  std::string name;
+  std::optional<std::string> name;
+  std::optional<std::string> description;
+  std::optional<VectorStoreExpiresAfter> expires_after;
+  std::vector<std::string> file_ids;
   std::map<std::string, std::string> metadata;
-  nlohmann::json extra = nlohmann::json::object();
+  std::optional<VectorStoreChunkingStrategy> chunking_strategy;
 };
 
 struct VectorStoreUpdateRequest {
   std::optional<std::string> name;
-  std::optional<std::map<std::string, std::string>> metadata;
-  nlohmann::json extra = nlohmann::json::object();
+  std::map<std::string, std::string> metadata;
+  std::optional<VectorStoreExpiresAfter> expires_after;
 };
 
 struct VectorStoreDeleteResponse {
@@ -164,3 +199,4 @@ private:
 };
 
 }  // namespace openai
+

@@ -61,27 +61,32 @@ std::string build_multipart_body(const std::vector<std::pair<std::string, std::s
 
 std::string build_image_multipart(const ImageVariationRequest& request, const std::string& boundary) {
   std::vector<std::pair<std::string, std::string>> parts;
-  parts.emplace_back("purpose", request.image.purpose);
-  parts.emplace_back("prompt", request.prompt.value_or(""));
+  parts.emplace_back("image", load_file(request.image.file_path));
+  if (request.model) parts.emplace_back("model", *request.model);
+  if (request.prompt) parts.emplace_back("prompt", *request.prompt);
   if (request.n) parts.emplace_back("n", std::to_string(*request.n));
   if (request.size) parts.emplace_back("size", *request.size);
   if (request.response_format) parts.emplace_back("response_format", *request.response_format);
-  parts.emplace_back("image", load_file(request.image.file_path));
+  if (request.quality) parts.emplace_back("quality", *request.quality);
+  if (request.style) parts.emplace_back("style", *request.style);
+  if (request.background) parts.emplace_back("background", *request.background);
+  if (request.user) parts.emplace_back("user", *request.user);
   return build_multipart_body(parts, boundary);
 }
 
 }  // namespace
 
 ImagesResponse ImagesResource::generate(const ImageGenerateRequest& request, const RequestOptions& options) const {
-  json body = request.extra.is_null() ? json::object() : request.extra;
-  if (!body.is_object()) {
-    throw OpenAIError("ImageGenerateRequest.extra must be an object");
-  }
+  json body;
   body["prompt"] = request.prompt;
   if (request.model) body["model"] = *request.model;
   if (request.n) body["n"] = *request.n;
   if (request.size) body["size"] = *request.size;
   if (request.response_format) body["response_format"] = *request.response_format;
+  if (request.quality) body["quality"] = *request.quality;
+  if (request.style) body["style"] = *request.style;
+  if (request.background) body["background"] = *request.background;
+  if (request.user) body["user"] = *request.user;
 
   auto response = client_.perform_request("POST", kImagesGenerate, body.dump(), options);
   try {
@@ -120,6 +125,7 @@ ImagesResponse ImagesResource::create_variation(const ImageVariationRequest& req
 ImagesResponse ImagesResource::edit(const ImageEditRequest& request, const RequestOptions& options) const {
   const std::string boundary = "----openai-cpp-image-boundary";
   std::vector<std::pair<std::string, std::string>> parts;
+  if (request.model) parts.emplace_back("model", *request.model);
   parts.emplace_back("prompt", request.prompt.value_or(""));
   if (request.n) parts.emplace_back("n", std::to_string(*request.n));
   if (request.size) parts.emplace_back("size", *request.size);
@@ -128,6 +134,10 @@ ImagesResponse ImagesResource::edit(const ImageEditRequest& request, const Reque
   if (request.mask) {
     parts.emplace_back("mask", load_file(request.mask->file_path));
   }
+  if (request.quality) parts.emplace_back("quality", *request.quality);
+  if (request.style) parts.emplace_back("style", *request.style);
+  if (request.background) parts.emplace_back("background", *request.background);
+  if (request.user) parts.emplace_back("user", *request.user);
   auto body = build_multipart_body(parts, boundary);
 
   RequestOptions request_options = options;
@@ -147,4 +157,3 @@ ImagesResponse ImagesResource::edit(const ImageEditRequest& request) const {
 }
 
 }  // namespace openai
-

@@ -28,8 +28,12 @@ TEST(ChatCompletionsResourceTest, CreateStreamParsesEvents) {
   request.model = "gpt-4o";
   ChatMessage message;
   message.role = "user";
-  message.content = std::string("Hi");
+  ChatMessageContent content;
+  content.type = ChatMessageContent::Type::Text;
+  content.text = "Hi";
+  message.content.push_back(content);
   request.messages.push_back(message);
+  request.temperature = 0.2;
 
   auto events = client.chat().completions().create_stream(request);
   ASSERT_EQ(events.size(), 1u);

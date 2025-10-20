@@ -32,7 +32,7 @@ void append_field(std::ostringstream& body, const std::string& name, const std::
   body << value << "\r\n";
 }
 
-std::string build_multipart(const TranscriptionRequest& request) {
+std::string build_transcription_multipart(const TranscriptionRequest& request) {
   std::ostringstream body;
   const auto file_content = load_file(request.file.file_path);
   const std::string filename = request.file.file_name.value_or("audio.wav");
@@ -45,20 +45,20 @@ std::string build_multipart(const TranscriptionRequest& request) {
   body << "\r\n";
 
   append_field(body, "model", request.model);
-
-  if (request.response_format) {
-    append_field(body, "response_format", *request.response_format);
-  }
-
-  if (request.language) {
-    append_field(body, "language", *request.language);
-  }
-
-  if (request.extra.is_object()) {
-    for (auto it = request.extra.begin(); it != request.extra.end(); ++it) {
-      append_field(body, it.key(), it.value().dump());
+  if (request.response_format) append_field(body, "response_format", *request.response_format);
+  if (request.language) append_field(body, "language", *request.language);
+  if (request.prompt) append_field(body, "prompt", *request.prompt);
+  if (request.temperature) append_field(body, "temperature", std::to_string(*request.temperature));
+  if (request.timestamp_granularities) {
+    for (const auto& granularity : *request.timestamp_granularities) {
+      append_field(body, "timestamp_granularities[]", granularity);
     }
   }
+  if (request.logprobs) append_field(body, "logprobs", *request.logprobs ? "true" : "false");
+  if (request.max_alternatives) append_field(body, "max_alternatives", std::to_string(*request.max_alternatives));
+  if (request.profanity_filter) append_field(body, "profanity_filter", *request.profanity_filter ? "true" : "false");
+  if (request.remove_background) append_field(body, "remove_background", *request.remove_background ? "true" : "false");
+  if (request.speaker_labels) append_field(body, "speaker_labels", *request.speaker_labels ? "true" : "false");
 
   body << "--" << kBoundary << "--\r\n";
   return body.str();
@@ -77,20 +77,9 @@ std::string build_translation_multipart(const TranslationRequest& request) {
   body << "\r\n";
 
   append_field(body, "model", request.model);
-  if (request.prompt) {
-    append_field(body, "prompt", *request.prompt);
-  }
-  if (request.response_format) {
-    append_field(body, "response_format", *request.response_format);
-  }
-  if (request.temperature) {
-    append_field(body, "temperature", std::to_string(*request.temperature));
-  }
-  if (request.extra.is_object()) {
-    for (auto it = request.extra.begin(); it != request.extra.end(); ++it) {
-      append_field(body, it.key(), it.value().dump());
-    }
-  }
+  if (request.prompt) append_field(body, "prompt", *request.prompt);
+  if (request.response_format) append_field(body, "response_format", *request.response_format);
+  if (request.temperature) append_field(body, "temperature", std::to_string(*request.temperature));
 
   body << "--" << kBoundary << "--\r\n";
   return body.str();
@@ -118,7 +107,7 @@ TranscriptionResponse AudioTranscriptionsResource::create(const TranscriptionReq
                                                           const RequestOptions& options) const {
   RequestOptions request_options = options;
   request_options.headers["Content-Type"] = "multipart/form-data; boundary=" + std::string(kBoundary);
-  auto body = build_multipart(request);
+  auto body = build_transcription_multipart(request);
   auto response = client_.perform_request("POST", kAudioTranscriptions, body, request_options);
   try {
     auto payload = json::parse(response.body);
@@ -133,7 +122,7 @@ TranscriptionResponse AudioTranscriptionsResource::create(const TranscriptionReq
 }
 
 TranslationResponse AudioTranslationsResource::create(const TranslationRequest& request,
-                                                      const RequestOptions& options) const {
+                                                       const RequestOptions& options) const {
   RequestOptions request_options = options;
   request_options.headers["Content-Type"] = "multipart/form-data; boundary=" + std::string(kBoundary);
   auto body = build_translation_multipart(request);
@@ -143,11 +132,7 @@ TranslationResponse AudioTranslationsResource::create(const TranslationRequest& 
   try {
     auto payload = json::parse(response.body);
     translation.raw = payload;
-    if (payload.contains("text") && payload["text"].is_string()) {
-      translation.text = payload["text"].get<std::string>();
-    } else {
-      translation.text = response.body;
-    }
+    translation.text = payload.value("text", response.body);
   } catch (const json::exception&) {
     translation.text = response.body;
   }
@@ -159,10 +144,7 @@ TranslationResponse AudioTranslationsResource::create(const TranslationRequest& 
 }
 
 SpeechResponse AudioSpeechResource::create(const SpeechRequest& request, const RequestOptions& options) const {
-  json body = request.extra.is_null() ? json::object() : request.extra;
-  if (!body.is_object()) {
-    throw OpenAIError("SpeechRequest.extra must be an object");
-  }
+  json body;
   body["input"] = request.input;
   body["model"] = request.model;
   body["voice"] = request.voice;
@@ -186,3 +168,4 @@ SpeechResponse AudioSpeechResource::create(const SpeechRequest& request) const {
 }
 
 }  // namespace openai
+

@@ -23,18 +23,55 @@ void apply_beta_header(RequestOptions& options) {
   options.headers[kBetaHeaderName] = kBetaHeaderValue;
 }
 
+json chunking_strategy_to_json(const VectorStoreChunkingStrategy& strategy) {
+  json chunk;
+  if (strategy.type == VectorStoreChunkingStrategy::Type::Auto) {
+    chunk["type"] = "auto";
+  } else {
+    chunk["type"] = "static";
+    if (strategy.max_chunk_size_tokens) chunk["max_chunk_size_tokens"] = *strategy.max_chunk_size_tokens;
+    if (strategy.chunk_overlap_tokens) chunk["chunk_overlap_tokens"] = *strategy.chunk_overlap_tokens;
+  }
+  return chunk;
+}
+
 VectorStore parse_vector_store(const json& payload) {
   VectorStore store;
   store.raw = payload;
   store.id = payload.value("id", "");
-  store.name = payload.value("name", "");
+  if (payload.contains("name") && !payload["name"].is_null()) {
+    store.name = payload["name"].get<std::string>();
+  }
   store.object = payload.value("object", "");
   store.created_at = payload.value("created_at", 0);
+  if (payload.contains("description") && payload["description"].is_string()) {
+    store.description = payload["description"].get<std::string>();
+  }
+  if (payload.contains("usage_bytes") && payload["usage_bytes"].is_number_integer()) {
+    store.usage_bytes = payload["usage_bytes"].get<int>();
+  }
+  if (payload.contains("last_active_at") && payload["last_active_at"].is_number_integer()) {
+    store.last_active_at = payload["last_active_at"].get<int>();
+  }
+  if (payload.contains("file_counts") && payload["file_counts"].is_object()) {
+    VectorStoreFileCounts counts;
+    const auto& fc = payload.at("file_counts");
+    counts.cancelled = fc.value("cancelled", 0);
+    counts.completed = fc.value("completed", 0);
+    counts.failed = fc.value("failed", 0);
+    counts.in_progress = fc.value("in_progress", 0);
+    counts.total = fc.value("total", 0);
+    store.file_counts = counts;
+  }
+  if (payload.contains("status") && payload["status"].is_string()) {
+    store.status = payload["status"].get<std::string>();
+  }
+  if (payload.contains("expires_at") && payload["expires_at"].is_number_integer()) {
+    store.expires_at = payload["expires_at"].get<int>();
+  }
   if (payload.contains("metadata") && payload["metadata"].is_object()) {
     for (auto it = payload["metadata"].begin(); it != payload["metadata"].end(); ++it) {
-      if (it.value().is_string()) {
-        store.metadata[it.key()] = it.value().get<std::string>();
-      }
+      if (it.value().is_string()) store.metadata[it.key()] = it.value().get<std::string>();
     }
   }
   return store;
@@ -127,29 +164,36 @@ VectorStoreSearchResults parse_search_results(const json& payload) {
 }
 
 json build_create_body(const VectorStoreCreateRequest& request) {
-  json body = request.extra.is_null() ? json::object() : request.extra;
-  if (!body.is_object()) {
-    throw OpenAIError("VectorStoreCreateRequest.extra must be an object");
+  json body;
+  if (request.name) body["name"] = *request.name;
+  if (request.description) body["description"] = *request.description;
+  if (request.expires_after) {
+    body["expires_after"] = { {"anchor", request.expires_after->anchor}, {"days", request.expires_after->days} };
   }
-  body["name"] = request.name;
-  if (!request.metadata.empty()) {
-    body["metadata"] = request.metadata;
-  }
+  if (!request.file_ids.empty()) body["file_ids"] = request.file_ids;
+  if (!request.metadata.empty()) body["metadata"] = request.metadata;
+  if (request.chunking_strategy) body["chunking_strategy"] = chunking_strategy_to_json(*request.chunking_strategy);
   return body;
 }
 
 json build_update_body(const VectorStoreUpdateRequest& request) {
-  json body = request.extra.is_null() ? json::object() : request.extra;
-  if (!body.is_object()) {
-    throw OpenAIError("VectorStoreUpdateRequest.extra must be an object");
-  }
-  if (request.name) {
-    body["name"] = *request.name;
-  }
-  if (request.metadata) {
-    body["metadata"] = *request.metadata;
+  json body;
+  if (request.name) body["name"] = *request.name;
+  if (!request.metadata.empty()) body["metadata"] = request.metadata;
+  if (request.expires_after) {
+    body["expires_after"] = { {"anchor", request.expires_after->anchor}, {"days", request.expires_after->days} };
   }
   return body;
+}
+
+json attributes_to_json(const std::map<std::string, AttributeValue>& attributes) {
+  json object = json::object();
+  for (const auto& entry : attributes) {
+    const auto& key = entry.first;
+    const auto& value = entry.second;
+    std::visit([&](auto&& v) { object[key] = v; }, value);
+  }
+  return object;
 }
 
 }  // namespace
@@ -243,10 +287,7 @@ VectorStoreFile VectorStoresResource::attach_file(const std::string& vector_stor
   RequestOptions request_options = options;
   apply_beta_header(request_options);
 
-  json body = request.extra.is_null() ? json::object() : request.extra;
-  if (!body.is_object()) {
-    throw OpenAIError("VectorStoreFileCreateRequest.extra must be an object");
-  }
+  json body;
   body["file_id"] = request.file_id;
 
   auto path = std::string(kVectorStoresPath) + "/" + vector_store_id + kVectorStoreFilesSuffix;
@@ -308,11 +349,10 @@ VectorStoreFileBatch VectorStoresResource::create_file_batch(const std::string& 
   RequestOptions request_options = options;
   apply_beta_header(request_options);
 
-  json body = request.extra.is_null() ? json::object() : request.extra;
-  if (!body.is_object()) {
-    throw OpenAIError("VectorStoreFileBatchCreateRequest.extra must be an object");
-  }
+  json body;
   body["file_ids"] = request.file_ids;
+  if (!request.attributes.empty()) body["attributes"] = attributes_to_json(request.attributes);
+  if (request.chunking_strategy) body["chunking_strategy"] = chunking_strategy_to_json(*request.chunking_strategy);
 
   auto path = std::string(kVectorStoresPath) + "/" + vector_store_id + kVectorStoreFileBatchesSuffix;
   auto response = client_.perform_request("POST", path, body.dump(), request_options);
@@ -382,26 +422,17 @@ VectorStoreSearchResults VectorStoresResource::search(const std::string& vector_
   } else {
     body["query"] = request.query;
   }
-  if (request.metadata_filter) {
-    body["filters"] = *request.metadata_filter;
-  }
-  if (request.max_num_results) {
-    body["max_num_results"] = *request.max_num_results;
-  }
+  if (request.metadata_filter) body["filters"] = attributes_to_json(*request.metadata_filter);
+  if (request.max_num_results) body["max_num_results"] = *request.max_num_results;
   if (request.ranking_options) {
     json ranking;
     ranking["ranker"] = request.ranking_options->ranker;
-    if (request.ranking_options->score_threshold) {
-      ranking["score_threshold"] = *request.ranking_options->score_threshold;
-    }
+    if (request.ranking_options->score_threshold) ranking["score_threshold"] = *request.ranking_options->score_threshold;
     body["ranking_options"] = std::move(ranking);
   }
-  if (request.rewrite_query) {
-    body["rewrite_query"] = *request.rewrite_query;
-  }
+  if (request.rewrite_query) body["rewrite_query"] = *request.rewrite_query;
 
   auto path = std::string(kVectorStoresPath) + "/" + vector_store_id + "/search";
-  // search uses POST but returns a list; we mimic getAPIList behavior by performing POST then parsing list.
   auto response = client_.perform_request("POST", path, body.dump(), request_options);
   try {
     auto payload = json::parse(response.body);

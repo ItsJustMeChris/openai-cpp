@@ -29,8 +29,9 @@ TEST(VectorStoresResourceTest, CreateParsesResponse) {
   OpenAIClient client(options, std::move(mock_client));
 
   VectorStoreCreateRequest request;
-  request.name = "My Vector Store";
+  request.name = std::string("My Vector Store");
   request.metadata["project"] = "demo";
+  request.file_ids.push_back("file_1");
 
   auto store = client.vector_stores().create(request);
   EXPECT_EQ(store.id, "vs_123");
@@ -206,6 +207,7 @@ TEST(VectorStoresResourceTest, CreateFileBatchParsesResponse) {
 
   VectorStoreFileBatchCreateRequest request;
   request.file_ids = {"file_1", "file_2"};
+  request.attributes["priority"] = true;
 
   auto batch = client.vector_stores().create_file_batch("vs_123", request);
   EXPECT_EQ(batch.id, "vsfb_123");
@@ -273,7 +275,7 @@ TEST(VectorStoresResourceTest, SearchReturnsResults) {
 
   VectorStoreSearchRequest request;
   request.query = {"hello"};
-  request.metadata_filter = std::map<std::string, std::string>{{"project", "demo"}};
+  request.metadata_filter = std::map<std::string, AttributeValue>{{"project", AttributeValue{std::string("demo")}}};
   VectorStoreSearchRequest::RankingOptions ranking;
   ranking.ranker = "auto";
   ranking.score_threshold = 0.5;

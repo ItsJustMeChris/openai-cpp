@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <optional>
 #include <string>
 #include <variant>
@@ -12,9 +13,24 @@
 namespace openai {
 
 struct ChatMessageContent {
-  std::string type;
-  nlohmann::json data;
-  std::optional<std::string> text;
+  enum class Type {
+    Text,
+    Image,
+    File,
+    Audio,
+    Raw
+  };
+
+  Type type = Type::Text;
+  std::string text;
+  std::string image_url;
+  std::string image_detail;
+  std::string file_id;
+  std::string file_url;
+  std::string filename;
+  std::string audio_data;
+  std::string audio_format;
+  nlohmann::json raw = nlohmann::json::object();
 };
 
 struct ChatCompletionToolCall {
@@ -26,11 +42,10 @@ struct ChatCompletionToolCall {
 
 struct ChatMessage {
   std::string role;
-  std::variant<std::monostate, std::string, std::vector<ChatMessageContent>> content;
+  std::vector<ChatMessageContent> content;
   std::optional<std::string> name;
   std::vector<ChatCompletionToolCall> tool_calls;
-  nlohmann::json metadata = nlohmann::json::object();
-  nlohmann::json extra_fields = nlohmann::json::object();
+  std::map<std::string, std::string> metadata;
   nlohmann::json raw = nlohmann::json::object();
 };
 
@@ -60,13 +75,51 @@ struct ChatCompletion {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct ChatResponseFormat {
+  std::string type;
+  nlohmann::json json_schema = nlohmann::json::object();
+};
+
+struct ChatToolFunctionDefinition {
+  std::string name;
+  std::optional<std::string> description;
+  nlohmann::json parameters = nlohmann::json::object();
+};
+
+struct ChatCompletionToolDefinition {
+  std::string type;
+  std::optional<ChatToolFunctionDefinition> function;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ChatToolChoice {
+  std::string type;
+  std::optional<std::string> function_name;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct RequestOptions;
 
 struct ChatCompletionRequest {
   std::string model;
   std::vector<ChatMessage> messages;
+  std::map<std::string, std::string> metadata;
+  std::optional<int> max_tokens;
+  std::optional<double> temperature;
+  std::optional<double> top_p;
+  std::optional<double> frequency_penalty;
+  std::optional<double> presence_penalty;
+  std::map<std::string, double> logit_bias;
+  std::optional<bool> logprobs;
+  std::optional<int> top_logprobs;
+  std::optional<std::vector<std::string>> stop;
+  std::optional<int64_t> seed;
+  std::optional<ChatResponseFormat> response_format;
+  std::vector<ChatCompletionToolDefinition> tools;
+  std::optional<ChatToolChoice> tool_choice;
+  std::optional<bool> parallel_tool_calls;
+  std::optional<std::string> user;
   std::optional<bool> stream;
-  nlohmann::json extra_params = nlohmann::json::object();
 };
 
 class OpenAIClient;
@@ -100,3 +153,4 @@ private:
 };
 
 }  // namespace openai
+
