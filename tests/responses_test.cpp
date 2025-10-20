@@ -113,3 +113,47 @@ TEST(ResponsesResourceTest, CancelParsesResponse) {
   EXPECT_EQ(request.method, "POST");
   EXPECT_NE(request.url.find("/responses/resp_cancel/cancel"), std::string::npos);
 }
+
+TEST(ResponsesResourceTest, ListParsesResponsesArray) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string list_body = R"({
+    "data": [
+      {
+        "id": "resp_1",
+        "object": "response",
+        "created": 10,
+        "model": "gpt-4o",
+        "output": []
+      },
+      {
+        "id": "resp_2",
+        "object": "response",
+        "created": 11,
+        "model": "gpt-4o",
+        "output": []
+      }
+    ],
+    "has_more": true
+  })";
+
+  mock_ptr->enqueue_response(openai::HttpResponse{200, {}, list_body});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  auto list = client.responses().list();
+  ASSERT_EQ(list.data.size(), 2u);
+  EXPECT_TRUE(list.has_more);
+  EXPECT_EQ(list.data[0].id, "resp_1");
+  EXPECT_EQ(list.data[1].id, "resp_2");
+
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  EXPECT_EQ(mock_ptr->last_request()->method, "GET");
+  EXPECT_NE(mock_ptr->last_request()->url.find("/responses"), std::string::npos);
+}

@@ -99,6 +99,18 @@ Response parse_response(const json& payload) {
   return response;
 }
 
+ResponseList parse_response_list(const json& payload) {
+  ResponseList list;
+  list.raw = payload;
+  if (payload.contains("data")) {
+    for (const auto& item : payload.at("data")) {
+      list.data.push_back(parse_response(item));
+    }
+  }
+  list.has_more = payload.value("has_more", false);
+  return list;
+}
+
 json build_retrieve_query(const ResponseRetrieveOptions& options) {
   json query = json::object();
   query["stream"] = options.stream;
@@ -167,6 +179,20 @@ Response ResponsesResource::cancel(const std::string& response_id, const Request
 
 Response ResponsesResource::cancel(const std::string& response_id) const {
   return cancel(response_id, RequestOptions{});
+}
+
+ResponseList ResponsesResource::list(const RequestOptions& options) const {
+  auto response = client_.perform_request("GET", kResponseEndpoint, "", options);
+  try {
+    auto payload = json::parse(response.body);
+    return parse_response_list(payload);
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse responses list: ") + ex.what());
+  }
+}
+
+ResponseList ResponsesResource::list() const {
+  return list(RequestOptions{});
 }
 
 }  // namespace openai

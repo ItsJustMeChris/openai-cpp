@@ -24,6 +24,14 @@ struct RequestOptions {
   std::optional<std::chrono::milliseconds> timeout;
 };
 
+struct PageRequestOptions {
+  std::string method;
+  std::string path;
+  std::map<std::string, std::string> headers;
+  std::map<std::string, std::string> query;
+  std::string body;
+};
+
 struct ClientOptions {
   std::string api_key;
   std::optional<std::string> organization;
@@ -123,6 +131,8 @@ private:
                                const std::string& path,
                                const std::string& body,
                                const RequestOptions& options) const;
+
+  HttpResponse perform_request(const PageRequestOptions& options) const;
 
   ClientOptions options_;
   std::unique_ptr<HttpClient> http_client_;

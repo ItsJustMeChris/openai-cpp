@@ -365,6 +365,13 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
   return response;
 }
 
+HttpResponse OpenAIClient::perform_request(const PageRequestOptions& options) const {
+  RequestOptions request_options;
+  request_options.headers = options.headers;
+  request_options.query_params = options.query;
+  return perform_request(options.method, options.path, options.body, request_options);
+}
+
 Completion CompletionsResource::create(const CompletionRequest& request,
                                        const RequestOptions& options) const {
   auto body = completion_request_to_json(request).dump();

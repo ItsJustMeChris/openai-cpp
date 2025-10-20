@@ -43,6 +43,12 @@ struct ResponseRetrieveOptions {
   bool stream = false;
 };
 
+struct ResponseList {
+  std::vector<Response> data;
+  bool has_more = false;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 class OpenAIClient;
 
 class ResponsesResource {
@@ -62,6 +68,9 @@ public:
 
   Response cancel(const std::string& response_id) const;
   Response cancel(const std::string& response_id, const struct RequestOptions& options) const;
+
+  ResponseList list() const;
+  ResponseList list(const struct RequestOptions& options) const;
 
 private:
   OpenAIClient& client_;

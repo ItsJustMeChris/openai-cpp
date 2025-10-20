@@ -14,10 +14,10 @@ The TypeScript SDK's `responses` surface is one of the richer modules and depend
 - **Shared models**: many types (tools, input items, response items) are generated in `responses.ts` itself and cross-reference `shared.ts` primitives (metadata, file search filters, etc.).
 
 ## Proposed C++ Milestones
-1. **Non-streaming baseline**
-   - Models for `Response` + nested types focused on `output_text` handling and minimal tool coverage.
-   - `ResponsesResource::create/retrieve/list/delete/cancel` with JSON encode/decode mirroring the TS shapes.
-   - Basic aggregation helper to populate `output_text` similar to `addOutputText`.
+1. **Non-streaming baseline** (in progress)
+   - ✅ Models for `Response` + nested types focused on `output_text` handling and minimal tool coverage.
+   - ✅ `ResponsesResource::create/retrieve/list/delete/cancel` with JSON encode/decode mirroring the TS shapes.
+   - ✅ Basic aggregation helper to populate `output_text` similar to `addOutputText`.
 2. **Streaming support**
    - Shared SSE consumer similar to `Stream` + `ResponseStream` for incremental events.
    - Hook into `ResponsesResource::create` when `stream=true`.
