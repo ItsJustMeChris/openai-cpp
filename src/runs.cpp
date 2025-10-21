@@ -7,6 +7,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <thread>
+
 namespace openai {
 namespace {
 
@@ -582,6 +584,88 @@ std::vector<AssistantStreamEvent> RunsResource::submit_tool_outputs_stream(
   }
 
   return events;
+}
+
+namespace {
+
+bool is_terminal_status(const std::string& status) {
+  return status == "completed" || status == "requires_action" || status == "failed" || status == "cancelled" ||
+         status == "incomplete" || status == "expired";
+}
+
+}
+
+Run RunsResource::poll(const std::string& run_id, const RunRetrieveParams& params) const {
+  return poll(run_id, params, RequestOptions{}, std::chrono::milliseconds(5000));
+}
+
+Run RunsResource::poll(const std::string& run_id,
+                       const RunRetrieveParams& params,
+                       const RequestOptions& options,
+                       std::chrono::milliseconds poll_interval) const {
+  while (true) {
+    RequestOptions request_options = options;
+    apply_beta_header(request_options);
+    auto response = client_.perform_request("GET", runs_path(params.thread_id) + "/" + run_id, "", request_options);
+    auto run = parse_run_response(response.body);
+
+    if (is_terminal_status(run.status)) {
+      return run;
+    }
+
+    std::chrono::milliseconds sleep_for = poll_interval;
+    auto header_it = response.headers.find("openai-poll-after-ms");
+    if (header_it != response.headers.end()) {
+      try {
+        sleep_for = std::chrono::milliseconds(std::stoll(header_it->second));
+      } catch (const std::exception&) {
+        // ignore malformed header, fall back to configured interval
+      }
+    }
+
+    if (sleep_for.count() > 0) {
+      std::this_thread::sleep_for(sleep_for);
+    }
+  }
+}
+
+Run RunsResource::create_and_run_poll(const std::string& thread_id, const RunCreateRequest& request) const {
+  return create_and_run_poll(thread_id, request, RequestOptions{}, std::chrono::milliseconds(5000));
+}
+
+Run RunsResource::create_and_run_poll(const std::string& thread_id,
+                                      const RunCreateRequest& request,
+                                      const RequestOptions& options,
+                                      std::chrono::milliseconds poll_interval) const {
+  Run initial = create(thread_id, request, options);
+  if (is_terminal_status(initial.status)) {
+    return initial;
+  }
+
+  RunRetrieveParams retrieve_params;
+  retrieve_params.thread_id = thread_id;
+  return poll(initial.id, retrieve_params, options, poll_interval);
+}
+
+Run RunsResource::submit_tool_outputs_and_poll(const std::string& thread_id,
+                                               const std::string& run_id,
+                                               const RunSubmitToolOutputsRequest& request) const {
+  return submit_tool_outputs_and_poll(thread_id, run_id, request, RequestOptions{}, std::chrono::milliseconds(5000));
+}
+
+Run RunsResource::submit_tool_outputs_and_poll(const std::string& thread_id,
+                                               const std::string& run_id,
+                                               const RunSubmitToolOutputsRequest& request,
+                                               const RequestOptions& options,
+                                               std::chrono::milliseconds poll_interval) const {
+  Run intermediate = submit_tool_outputs(thread_id, run_id, request, options);
+  if (is_terminal_status(intermediate.status)) {
+    return intermediate;
+  }
+
+  RunRetrieveParams retrieve_params;
+  retrieve_params.thread_id = thread_id;
+  return poll(run_id, retrieve_params, options, poll_interval);
 }
 
 }  // namespace openai

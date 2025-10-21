@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <map>
 #include <optional>
 #include <string>
@@ -14,6 +15,8 @@
 #include "openai/run_steps.hpp"
 
 namespace openai {
+
+struct RequestOptions;
 
 struct RunTruncationStrategy {
   enum class Type { Auto, LastMessages };
@@ -191,7 +194,6 @@ using AssistantStreamEvent = std::variant<AssistantThreadEvent,
                                           AssistantMessageDeltaEvent,
                                           AssistantErrorEvent>;
 
-struct RequestOptions;
 class OpenAIClient;
 
 class RunsResource {
@@ -233,6 +235,27 @@ public:
                                                                const std::string& run_id,
                                                                const RunSubmitToolOutputsRequest& request,
                                                                const RequestOptions& options) const;
+
+  Run poll(const std::string& run_id, const RunRetrieveParams& params) const;
+  Run poll(const std::string& run_id,
+           const RunRetrieveParams& params,
+           const RequestOptions& options,
+           std::chrono::milliseconds poll_interval) const;
+
+  Run create_and_run_poll(const std::string& thread_id, const RunCreateRequest& request) const;
+  Run create_and_run_poll(const std::string& thread_id,
+                          const RunCreateRequest& request,
+                          const RequestOptions& options,
+                          std::chrono::milliseconds poll_interval) const;
+
+  Run submit_tool_outputs_and_poll(const std::string& thread_id,
+                                   const std::string& run_id,
+                                   const RunSubmitToolOutputsRequest& request) const;
+  Run submit_tool_outputs_and_poll(const std::string& thread_id,
+                                   const std::string& run_id,
+                                   const RunSubmitToolOutputsRequest& request,
+                                   const RequestOptions& options,
+                                   std::chrono::milliseconds poll_interval) const;
 
 private:
   OpenAIClient& client_;

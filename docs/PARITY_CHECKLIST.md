@@ -51,7 +51,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Assistants runs (beta create/retrieve/update/list/cancel/submit outputs)
 - [x] Run steps (beta list/retrieve)
 - [x] Assistants streaming events (typed parser)
-- [x] Run streaming helpers (`create_stream`, `submit_tool_outputs_stream`)
+- [x] Run streaming & polling helpers (`create_stream`, `submit_tool_outputs_stream`, `poll`, `create_and_run_poll`)
 - [ ] Assistants tool runner actions & automation helpers
 - [ ] Fine-tuning
 - [ ] Moderations

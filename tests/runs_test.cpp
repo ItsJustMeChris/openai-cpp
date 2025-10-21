@@ -6,6 +6,7 @@
 #include "support/mock_http_client.hpp"
 
 #include <nlohmann/json.hpp>
+#include <chrono>
 
 namespace oait = openai::testing;
 
@@ -177,4 +178,91 @@ TEST(RunsResourceTest, CreateStreamCollectsEvents) {
   EXPECT_TRUE(std::holds_alternative<AssistantMessageDeltaEvent>(events[3]));
   EXPECT_TRUE(std::holds_alternative<AssistantRunEvent>(events[4]));
   EXPECT_TRUE(std::holds_alternative<AssistantMessageEvent>(events[5]));
+}
+
+TEST(RunsResourceTest, PollAdvancesUntilTerminalState) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string queued =
+      R"({"id":"run_1","assistant_id":"asst","created_at":1,"model":"gpt-4o","object":"thread.run","parallel_tool_calls":false,"status":"in_progress","thread_id":"thread_1","tools":[]})";
+  const std::string completed =
+      R"({"id":"run_1","assistant_id":"asst","created_at":1,"model":"gpt-4o","object":"thread.run","parallel_tool_calls":false,"status":"completed","thread_id":"thread_1","tools":[]})";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {{"openai-poll-after-ms", "1"}}, queued});
+  mock_ptr->enqueue_response(HttpResponse{200, {}, completed});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  RunRetrieveParams params;
+  params.thread_id = "thread_1";
+
+  RequestOptions request_options;
+  auto run = client.runs().poll("run_1", params, request_options, std::chrono::milliseconds(0));
+  EXPECT_EQ(run.status, "completed");
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  EXPECT_NE(mock_ptr->last_request()->url.find("run_1"), std::string::npos);
+}
+
+TEST(RunsResourceTest, CreateAndRunPollUsesHelpers) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string created =
+      R"({"id":"run_1","assistant_id":"asst","created_at":1,"model":"gpt-4o","object":"thread.run","parallel_tool_calls":false,"status":"in_progress","thread_id":"thread_1","tools":[]})";
+  const std::string completed =
+      R"({"id":"run_1","assistant_id":"asst","created_at":1,"model":"gpt-4o","object":"thread.run","parallel_tool_calls":false,"status":"completed","thread_id":"thread_1","tools":[]})";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, created});
+  mock_ptr->enqueue_response(HttpResponse{200, {}, completed});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  RunCreateRequest request;
+  request.assistant_id = "asst";
+
+  RequestOptions request_options;
+  auto run = client.runs().create_and_run_poll("thread_1", request, request_options, std::chrono::milliseconds(0));
+  EXPECT_EQ(run.status, "completed");
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  EXPECT_NE(mock_ptr->last_request()->url.find("run_1"), std::string::npos);
+}
+
+TEST(RunsResourceTest, SubmitToolOutputsAndPoll) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string in_progress =
+      R"({"id":"run_1","assistant_id":"asst","created_at":1,"model":"gpt-4o","object":"thread.run","parallel_tool_calls":false,"status":"in_progress","thread_id":"thread_1","tools":[]})";
+  const std::string completed =
+      R"({"id":"run_1","assistant_id":"asst","created_at":1,"model":"gpt-4o","object":"thread.run","parallel_tool_calls":false,"status":"completed","thread_id":"thread_1","tools":[]})";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, in_progress});
+  mock_ptr->enqueue_response(HttpResponse{200, {}, completed});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  RunSubmitToolOutputsRequest request;
+  request.thread_id = "thread_1";
+  request.outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call", .output = "result"});
+
+  RequestOptions request_options;
+  auto run = client.runs().submit_tool_outputs_and_poll(
+      "thread_1", "run_1", request, request_options, std::chrono::milliseconds(0));
+  EXPECT_EQ(run.status, "completed");
 }
