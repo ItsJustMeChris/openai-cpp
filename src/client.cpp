@@ -308,6 +308,7 @@ OpenAIClient::OpenAIClient(ClientOptions options,
       assistants_(*this),
       threads_(*this),
       thread_messages_(*this),
+      runs_(*this),
       chat_(*this) {
   if (options_.api_key.empty()) {
     throw OpenAIError("ClientOptions.api_key must be set");

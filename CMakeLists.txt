@@ -23,6 +23,7 @@ add_library(openai-cpp
     src/assistants.cpp
     src/threads.cpp
     src/messages.cpp
+    src/runs.cpp
     src/streaming.cpp
 )
 

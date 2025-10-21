@@ -34,6 +34,7 @@ struct AssistantTool {
   Type type = Type::CodeInterpreter;
   std::optional<FileSearchOverrides> file_search;
   std::optional<FunctionDefinition> function;
+  nlohmann::json raw = nlohmann::json::object();
 };
 
 struct AssistantToolResources {
@@ -44,6 +45,12 @@ struct AssistantToolResources {
 struct AssistantResponseFormat {
   std::string type;
   nlohmann::json json_schema = nlohmann::json::object();
+};
+
+struct AssistantToolChoice {
+  std::string type;
+  std::optional<std::string> function_name;
+  nlohmann::json raw = nlohmann::json::object();
 };
 
 struct Assistant {
@@ -139,4 +146,3 @@ private:
 };
 
 }  // namespace openai
-

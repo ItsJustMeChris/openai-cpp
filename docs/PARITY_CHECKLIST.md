@@ -47,7 +47,9 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Vector store files/batches/search
 - [x] Assistants (beta create/retrieve/update/list/delete)
 - [x] Threads (beta create/retrieve/update/delete)
-- [ ] Assistants threads/messages/runs/tool actions
+- [x] Assistants messages (beta thread messages)
+- [x] Assistants runs (beta create/retrieve/update/list/cancel/submit outputs)
+- [ ] Assistants run steps / streaming events / tool actions
 - [ ] Fine-tuning
 - [ ] Moderations
 - [ ] Conversations
