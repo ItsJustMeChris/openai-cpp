@@ -19,6 +19,7 @@
 #include "openai/audio.hpp"
 #include "openai/vector_stores.hpp"
 #include "openai/assistants.hpp"
+#include "openai/threads.hpp"
 
 namespace openai {
 
@@ -135,6 +136,9 @@ public:
   AssistantsResource& assistants() { return assistants_; }
   const AssistantsResource& assistants() const { return assistants_; }
 
+  ThreadsResource& threads() { return threads_; }
+  const ThreadsResource& threads() const { return threads_; }
+
   ChatResource& chat() { return chat_; }
   const ChatResource& chat() const { return chat_; }
 
@@ -154,6 +158,7 @@ private:
   friend class AudioSpeechResource;
   friend class VectorStoresResource;
   friend class AssistantsResource;
+  friend class ThreadsResource;
   friend class ChatCompletionsResource;
 
   HttpResponse perform_request(const std::string& method,
@@ -175,6 +180,7 @@ private:
   AudioResource audio_;
   VectorStoresResource vector_stores_;
   AssistantsResource assistants_;
+  ThreadsResource threads_;
   ChatResource chat_;
 };
 

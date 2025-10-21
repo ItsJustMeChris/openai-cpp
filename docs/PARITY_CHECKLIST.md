@@ -46,6 +46,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Vector stores (basic CRUD)
 - [x] Vector store files/batches/search
 - [x] Assistants (beta create/retrieve/update/list/delete)
+- [x] Threads (beta create/retrieve/update/delete)
 - [ ] Assistants threads/messages/runs/tool actions
 - [ ] Fine-tuning
 - [ ] Moderations
