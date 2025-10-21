@@ -6,17 +6,23 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <functional>
 
 #include <nlohmann/json.hpp>
 
 #include "openai/assistants.hpp"
-#include "openai/threads.hpp"
+#include "openai/thread_types.hpp"
 #include "openai/messages.hpp"
 #include "openai/run_steps.hpp"
 
 namespace openai {
 
+struct Run;
+struct RunRequiredAction;
+struct RunSubmitToolOutput;
 struct RequestOptions;
+
+using ToolOutputGenerator = std::function<std::vector<RunSubmitToolOutput>(const Run& run, const RunRequiredAction& action)>;
 
 struct RunTruncationStrategy {
   enum class Type { Auto, LastMessages };
@@ -151,6 +157,11 @@ struct RunSubmitToolOutputsRequest {
   std::optional<bool> stream;
 };
 
+struct ThreadCreateAndRunRequest {
+  std::optional<ThreadCreateRequest> thread;
+  RunCreateRequest run;
+};
+
 struct AssistantThreadEvent {
   std::string name;
   Thread thread;
@@ -194,6 +205,8 @@ using AssistantStreamEvent = std::variant<AssistantThreadEvent,
                                           AssistantMessageDeltaEvent,
                                           AssistantErrorEvent>;
 
+struct AssistantStreamSnapshot;
+
 class OpenAIClient;
 
 class RunsResource {
@@ -223,10 +236,25 @@ public:
   Run submit_tool_outputs(const std::string& thread_id, const std::string& run_id,
                           const RunSubmitToolOutputsRequest& request, const RequestOptions& options) const;
 
+  Run submit_tool_outputs(const std::string& run_id, const RunSubmitToolOutputsRequest& request) const;
+  Run submit_tool_outputs(const std::string& run_id,
+                          const RunSubmitToolOutputsRequest& request,
+                          const RequestOptions& options) const;
+
   std::vector<AssistantStreamEvent> create_stream(const std::string& thread_id, const RunCreateRequest& request) const;
   std::vector<AssistantStreamEvent> create_stream(const std::string& thread_id,
                                                   const RunCreateRequest& request,
                                                   const RequestOptions& options) const;
+
+  AssistantStreamSnapshot create_stream_snapshot(const std::string& thread_id, const RunCreateRequest& request) const;
+  AssistantStreamSnapshot create_stream_snapshot(const std::string& thread_id,
+                                                 const RunCreateRequest& request,
+                                                 const RequestOptions& options) const;
+
+  std::vector<AssistantStreamEvent> stream(const std::string& thread_id, const RunCreateRequest& request) const;
+  std::vector<AssistantStreamEvent> stream(const std::string& thread_id,
+                                           const RunCreateRequest& request,
+                                           const RequestOptions& options) const;
 
   std::vector<AssistantStreamEvent> submit_tool_outputs_stream(const std::string& thread_id,
                                                                const std::string& run_id,
@@ -235,6 +263,26 @@ public:
                                                                const std::string& run_id,
                                                                const RunSubmitToolOutputsRequest& request,
                                                                const RequestOptions& options) const;
+
+  std::vector<AssistantStreamEvent> submit_tool_outputs_stream(const std::string& run_id,
+                                                               const RunSubmitToolOutputsRequest& request) const;
+  std::vector<AssistantStreamEvent> submit_tool_outputs_stream(const std::string& run_id,
+                                                               const RunSubmitToolOutputsRequest& request,
+                                                               const RequestOptions& options) const;
+
+  AssistantStreamSnapshot submit_tool_outputs_stream_snapshot(const std::string& thread_id,
+                                                              const std::string& run_id,
+                                                              const RunSubmitToolOutputsRequest& request) const;
+  AssistantStreamSnapshot submit_tool_outputs_stream_snapshot(const std::string& thread_id,
+                                                              const std::string& run_id,
+                                                              const RunSubmitToolOutputsRequest& request,
+                                                              const RequestOptions& options) const;
+
+  AssistantStreamSnapshot submit_tool_outputs_stream_snapshot(const std::string& run_id,
+                                                              const RunSubmitToolOutputsRequest& request) const;
+  AssistantStreamSnapshot submit_tool_outputs_stream_snapshot(const std::string& run_id,
+                                                              const RunSubmitToolOutputsRequest& request,
+                                                              const RequestOptions& options) const;
 
   Run poll(const std::string& run_id, const RunRetrieveParams& params) const;
   Run poll(const std::string& run_id,
@@ -257,11 +305,35 @@ public:
                                    const RequestOptions& options,
                                    std::chrono::milliseconds poll_interval) const;
 
+  Run submit_tool_outputs_and_poll(const std::string& run_id,
+                                   const RunSubmitToolOutputsRequest& request) const;
+  Run submit_tool_outputs_and_poll(const std::string& run_id,
+                                   const RunSubmitToolOutputsRequest& request,
+                                   const RequestOptions& options,
+                                   std::chrono::milliseconds poll_interval) const;
+
+  Run resolve_required_action(const Run& run,
+                              const ToolOutputGenerator& generator) const;
+  Run resolve_required_action(const Run& run,
+                              const ToolOutputGenerator& generator,
+                              const RequestOptions& options,
+                              std::chrono::milliseconds poll_interval) const;
+
+  Run create_and_run_auto(const std::string& thread_id,
+                          const RunCreateRequest& request,
+                          const ToolOutputGenerator& generator) const;
+  Run create_and_run_auto(const std::string& thread_id,
+                          const RunCreateRequest& request,
+                          const ToolOutputGenerator& generator,
+                          const RequestOptions& options,
+                          std::chrono::milliseconds poll_interval) const;
+
 private:
   OpenAIClient& client_;
 };
 
 Run parse_run_json(const nlohmann::json& payload);
 RunList parse_run_list_json(const nlohmann::json& payload);
+nlohmann::json build_run_create_body(const RunCreateRequest& request);
 
 }  // namespace openai

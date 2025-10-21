@@ -170,7 +170,7 @@ json additional_messages_to_json(const std::vector<RunAdditionalMessage>& messag
   return array;
 }
 
-json create_request_to_json(const RunCreateRequest& request) {
+json build_run_create_body_impl(const RunCreateRequest& request) {
   json body;
   body["assistant_id"] = request.assistant_id;
   if (request.additional_instructions) body["additional_instructions"] = *request.additional_instructions;
@@ -387,6 +387,10 @@ Run parse_run_response(const std::string& body) {
 
 }  // namespace
 
+json build_run_create_body(const RunCreateRequest& request) {
+  return build_run_create_body_impl(request);
+}
+
 Run parse_run_json(const nlohmann::json& payload) {
   return parse_run_impl(payload);
 }
@@ -410,7 +414,7 @@ Run RunsResource::create(const std::string& thread_id, const RunCreateRequest& r
     }
     request_options.query_params["include"] = std::move(joined);
   }
-  const auto body = create_request_to_json(request);
+  const auto body = build_run_create_body(request);
   auto response = client_.perform_request("POST", runs_path(thread_id), body.dump(), request_options);
   return parse_run_response(response.body);
 }
@@ -501,24 +505,50 @@ Run RunsResource::submit_tool_outputs(const std::string& thread_id,
   return parse_run_response(response.body);
 }
 
+Run RunsResource::submit_tool_outputs(const std::string& run_id,
+                                      const RunSubmitToolOutputsRequest& request) const {
+  return submit_tool_outputs(run_id, request, RequestOptions{});
+}
+
+Run RunsResource::submit_tool_outputs(const std::string& run_id,
+                                      const RunSubmitToolOutputsRequest& request,
+                                      const RequestOptions& options) const {
+  if (request.thread_id.empty()) {
+    throw OpenAIError("RunSubmitToolOutputsRequest.thread_id must be set when using this helper");
+  }
+  return submit_tool_outputs(request.thread_id, run_id, request, options);
+}
+
 std::vector<AssistantStreamEvent> RunsResource::create_stream(const std::string& thread_id,
                                                               const RunCreateRequest& request) const {
-  return create_stream(thread_id, request, RequestOptions{});
+  return create_stream_snapshot(thread_id, request).events();
 }
 
 std::vector<AssistantStreamEvent> RunsResource::create_stream(const std::string& thread_id,
                                                               const RunCreateRequest& request,
                                                               const RequestOptions& options) const {
+  return create_stream_snapshot(thread_id, request, options).events();
+}
+
+AssistantStreamSnapshot RunsResource::create_stream_snapshot(const std::string& thread_id,
+                                                             const RunCreateRequest& request) const {
+  return create_stream_snapshot(thread_id, request, RequestOptions{});
+}
+
+AssistantStreamSnapshot RunsResource::create_stream_snapshot(const std::string& thread_id,
+                                                             const RunCreateRequest& request,
+                                                             const RequestOptions& options) const {
   RequestOptions request_options = options;
   apply_beta_header(request_options);
   request_options.collect_body = false;
+  request_options.headers["X-Stainless-Helper-Method"] = "stream";
 
   RunCreateRequest streaming_request = request;
   streaming_request.stream = true;
 
   SSEParser sse_parser;
-  std::vector<AssistantStreamEvent> events;
-  AssistantStreamParser parser([&](const AssistantStreamEvent& ev) { events.push_back(ev); });
+  AssistantStreamSnapshot snapshot;
+  AssistantStreamParser parser([&](const AssistantStreamEvent& ev) { snapshot.ingest(ev); });
 
   request_options.on_chunk = [&](const char* data, std::size_t size) {
     auto sse_events = sse_parser.feed(data, size);
@@ -536,7 +566,7 @@ std::vector<AssistantStreamEvent> RunsResource::create_stream(const std::string&
     request_options.query_params["include"] = std::move(joined);
   }
 
-  const auto body = create_request_to_json(streaming_request);
+  const auto body = build_run_create_body(streaming_request);
   client_.perform_request("POST", runs_path(thread_id), body.dump(), request_options);
 
   auto remaining = sse_parser.finalize();
@@ -544,12 +574,23 @@ std::vector<AssistantStreamEvent> RunsResource::create_stream(const std::string&
     parser.feed(sse_event);
   }
 
-  return events;
+  return snapshot;
+}
+
+std::vector<AssistantStreamEvent> RunsResource::stream(const std::string& thread_id,
+                                                       const RunCreateRequest& request) const {
+  return stream(thread_id, request, RequestOptions{});
+}
+
+std::vector<AssistantStreamEvent> RunsResource::stream(const std::string& thread_id,
+                                                       const RunCreateRequest& request,
+                                                       const RequestOptions& options) const {
+  return create_stream(thread_id, request, options);
 }
 
 std::vector<AssistantStreamEvent> RunsResource::submit_tool_outputs_stream(
     const std::string& thread_id, const std::string& run_id, const RunSubmitToolOutputsRequest& request) const {
-  return submit_tool_outputs_stream(thread_id, run_id, request, RequestOptions{});
+  return submit_tool_outputs_stream_snapshot(thread_id, run_id, request).events();
 }
 
 std::vector<AssistantStreamEvent> RunsResource::submit_tool_outputs_stream(
@@ -557,16 +598,32 @@ std::vector<AssistantStreamEvent> RunsResource::submit_tool_outputs_stream(
     const std::string& run_id,
     const RunSubmitToolOutputsRequest& request,
     const RequestOptions& options) const {
+  return submit_tool_outputs_stream_snapshot(thread_id, run_id, request, options).events();
+}
+
+AssistantStreamSnapshot RunsResource::submit_tool_outputs_stream_snapshot(
+    const std::string& thread_id,
+    const std::string& run_id,
+    const RunSubmitToolOutputsRequest& request) const {
+  return submit_tool_outputs_stream_snapshot(thread_id, run_id, request, RequestOptions{});
+}
+
+AssistantStreamSnapshot RunsResource::submit_tool_outputs_stream_snapshot(
+    const std::string& thread_id,
+    const std::string& run_id,
+    const RunSubmitToolOutputsRequest& request,
+    const RequestOptions& options) const {
   RequestOptions request_options = options;
   apply_beta_header(request_options);
   request_options.collect_body = false;
+  request_options.headers["X-Stainless-Helper-Method"] = "stream";
 
   RunSubmitToolOutputsRequest streaming_request = request;
   streaming_request.stream = true;
 
   SSEParser sse_parser;
-  std::vector<AssistantStreamEvent> events;
-  AssistantStreamParser parser([&](const AssistantStreamEvent& ev) { events.push_back(ev); });
+  AssistantStreamSnapshot snapshot;
+  AssistantStreamParser parser([&](const AssistantStreamEvent& ev) { snapshot.ingest(ev); });
 
   request_options.on_chunk = [&](const char* data, std::size_t size) {
     auto sse_events = sse_parser.feed(data, size);
@@ -583,7 +640,34 @@ std::vector<AssistantStreamEvent> RunsResource::submit_tool_outputs_stream(
     parser.feed(sse_event);
   }
 
-  return events;
+  return snapshot;
+}
+
+std::vector<AssistantStreamEvent> RunsResource::submit_tool_outputs_stream(
+    const std::string& run_id, const RunSubmitToolOutputsRequest& request) const {
+  return submit_tool_outputs_stream_snapshot(run_id, request).events();
+}
+
+std::vector<AssistantStreamEvent> RunsResource::submit_tool_outputs_stream(
+    const std::string& run_id,
+    const RunSubmitToolOutputsRequest& request,
+    const RequestOptions& options) const {
+  return submit_tool_outputs_stream_snapshot(run_id, request, options).events();
+}
+
+AssistantStreamSnapshot RunsResource::submit_tool_outputs_stream_snapshot(
+    const std::string& run_id, const RunSubmitToolOutputsRequest& request) const {
+  return submit_tool_outputs_stream_snapshot(run_id, request, RequestOptions{});
+}
+
+AssistantStreamSnapshot RunsResource::submit_tool_outputs_stream_snapshot(
+    const std::string& run_id,
+    const RunSubmitToolOutputsRequest& request,
+    const RequestOptions& options) const {
+  if (request.thread_id.empty()) {
+    throw OpenAIError("RunSubmitToolOutputsRequest.thread_id must be set when using this helper");
+  }
+  return submit_tool_outputs_stream_snapshot(request.thread_id, run_id, request, options);
 }
 
 namespace {
@@ -666,6 +750,68 @@ Run RunsResource::submit_tool_outputs_and_poll(const std::string& thread_id,
   RunRetrieveParams retrieve_params;
   retrieve_params.thread_id = thread_id;
   return poll(run_id, retrieve_params, options, poll_interval);
+}
+
+Run RunsResource::submit_tool_outputs_and_poll(const std::string& run_id,
+                                               const RunSubmitToolOutputsRequest& request) const {
+  return submit_tool_outputs_and_poll(run_id, request, RequestOptions{}, std::chrono::milliseconds(5000));
+}
+
+Run RunsResource::submit_tool_outputs_and_poll(const std::string& run_id,
+                                               const RunSubmitToolOutputsRequest& request,
+                                               const RequestOptions& options,
+                                               std::chrono::milliseconds poll_interval) const {
+  if (request.thread_id.empty()) {
+    throw OpenAIError("RunSubmitToolOutputsRequest.thread_id must be set when using this helper");
+  }
+  return submit_tool_outputs_and_poll(request.thread_id, run_id, request, options, poll_interval);
+}
+
+Run RunsResource::resolve_required_action(const Run& run, const ToolOutputGenerator& generator) const {
+  return resolve_required_action(run, generator, RequestOptions{}, std::chrono::milliseconds(5000));
+}
+
+Run RunsResource::resolve_required_action(const Run& run,
+                                          const ToolOutputGenerator& generator,
+                                          const RequestOptions& options,
+                                          std::chrono::milliseconds poll_interval) const {
+  if (!run.required_action.has_value()) {
+    return run;
+  }
+  if (!generator) {
+    throw OpenAIError("ToolOutputGenerator must be provided");
+  }
+
+  Run current = run;
+  while (current.status == "requires_action") {
+    const auto& required = current.required_action.value();
+    auto outputs = generator(current, required);
+    if (outputs.empty()) {
+      throw OpenAIError("ToolOutputGenerator returned no tool outputs");
+    }
+
+    RunSubmitToolOutputsRequest submit_request;
+    submit_request.thread_id = current.thread_id;
+    submit_request.outputs = std::move(outputs);
+
+    current = submit_tool_outputs_and_poll(current.id, submit_request, options, poll_interval);
+  }
+  return current;
+}
+
+Run RunsResource::create_and_run_auto(const std::string& thread_id,
+                                      const RunCreateRequest& request,
+                                      const ToolOutputGenerator& generator) const {
+  return create_and_run_auto(thread_id, request, generator, RequestOptions{}, std::chrono::milliseconds(5000));
+}
+
+Run RunsResource::create_and_run_auto(const std::string& thread_id,
+                                      const RunCreateRequest& request,
+                                      const ToolOutputGenerator& generator,
+                                      const RequestOptions& options,
+                                      std::chrono::milliseconds poll_interval) const {
+  Run initial = create(thread_id, request, options);
+  return resolve_required_action(initial, generator, options, poll_interval);
 }
 
 }  // namespace openai

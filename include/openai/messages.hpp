@@ -8,7 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "openai/threads.hpp"
+#include "openai/thread_types.hpp"
 
 namespace openai {
 

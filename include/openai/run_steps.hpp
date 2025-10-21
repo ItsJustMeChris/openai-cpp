@@ -9,7 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include "openai/assistants.hpp"
-#include "openai/threads.hpp"
+#include "openai/thread_types.hpp"
 #include "openai/messages.hpp"
 
 namespace openai {

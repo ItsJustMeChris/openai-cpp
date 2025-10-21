@@ -2,6 +2,9 @@
 
 #include "openai/client.hpp"
 #include "openai/error.hpp"
+#include "openai/runs.hpp"
+#include "openai/assistant_stream.hpp"
+#include "openai/streaming.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -114,7 +117,7 @@ json metadata_to_json(const std::map<std::string, std::string>& metadata) {
   return value;
 }
 
-json create_request_to_json(const ThreadCreateRequest& request) {
+json build_thread_create_body(const ThreadCreateRequest& request) {
   json body;
   if (!request.messages.empty()) {
     json messages = json::array();
@@ -209,7 +212,7 @@ Thread ThreadsResource::create(const ThreadCreateRequest& request) const {
 Thread ThreadsResource::create(const ThreadCreateRequest& request, const RequestOptions& options) const {
   RequestOptions request_options = options;
   apply_beta_header(request_options);
-  const auto body = create_request_to_json(request);
+  const auto body = build_thread_create_body(request);
   auto response = client_.perform_request("POST", kThreadsPath, body.dump(), request_options);
   try {
     return parse_thread_impl(json::parse(response.body));
@@ -264,6 +267,115 @@ ThreadDeleteResponse ThreadsResource::remove(const std::string& thread_id, const
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse thread delete response: ") + ex.what());
   }
+}
+
+Run ThreadsResource::create_and_run(const ThreadCreateAndRunRequest& request) const {
+  return create_and_run(request, RequestOptions{});
+}
+
+Run ThreadsResource::create_and_run(const ThreadCreateAndRunRequest& request, const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_beta_header(request_options);
+
+  if (request.run.include && !request.run.include->empty()) {
+    std::string joined;
+    for (size_t i = 0; i < request.run.include->size(); ++i) {
+      if (i > 0) joined += ",";
+      joined += (*request.run.include)[i];
+    }
+    request_options.query_params["include"] = std::move(joined);
+  }
+
+  json body;
+  if (request.thread) {
+    body["thread"] = build_thread_create_body(*request.thread);
+  }
+
+  auto run_body = build_run_create_body(request.run);
+  for (auto it = run_body.begin(); it != run_body.end(); ++it) {
+    body[it.key()] = it.value();
+  }
+
+  auto response = client_.perform_request("POST", std::string(kThreadsPath) + "/runs", body.dump(), request_options);
+  try {
+    return parse_run_json(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse run: ") + ex.what());
+  }
+}
+
+std::vector<AssistantStreamEvent> ThreadsResource::create_and_run_stream(const ThreadCreateAndRunRequest& request) const {
+  return create_and_run_stream_snapshot(request).events();
+}
+
+std::vector<AssistantStreamEvent> ThreadsResource::create_and_run_stream(const ThreadCreateAndRunRequest& request,
+                                                                        const RequestOptions& options) const {
+  return create_and_run_stream_snapshot(request, options).events();
+}
+
+AssistantStreamSnapshot ThreadsResource::create_and_run_stream_snapshot(const ThreadCreateAndRunRequest& request) const {
+  return create_and_run_stream_snapshot(request, RequestOptions{});
+}
+
+AssistantStreamSnapshot ThreadsResource::create_and_run_stream_snapshot(const ThreadCreateAndRunRequest& request,
+                                                                       const RequestOptions& options) const {
+  ThreadCreateAndRunRequest streaming_request = request;
+  streaming_request.run.stream = true;
+
+  RequestOptions request_options = options;
+  apply_beta_header(request_options);
+  request_options.collect_body = false;
+  request_options.headers["X-Stainless-Helper-Method"] = "stream";
+
+  if (streaming_request.run.include && !streaming_request.run.include->empty()) {
+    std::string joined;
+    for (size_t i = 0; i < streaming_request.run.include->size(); ++i) {
+      if (i > 0) joined += ",";
+      joined += (*streaming_request.run.include)[i];
+    }
+    request_options.query_params["include"] = std::move(joined);
+  }
+
+  SSEParser sse_parser;
+  AssistantStreamSnapshot snapshot;
+  AssistantStreamParser parser([&](const AssistantStreamEvent& ev) { snapshot.ingest(ev); });
+  request_options.on_chunk = [&](const char* data, std::size_t size) {
+    auto sse_events = sse_parser.feed(data, size);
+    for (const auto& sse_event : sse_events) parser.feed(sse_event);
+  };
+
+  json body;
+  if (streaming_request.thread) {
+    body["thread"] = build_thread_create_body(*streaming_request.thread);
+  }
+  auto run_body = build_run_create_body(streaming_request.run);
+  for (auto it = run_body.begin(); it != run_body.end(); ++it) {
+    body[it.key()] = it.value();
+  }
+
+  client_.perform_request("POST", std::string(kThreadsPath) + "/runs", body.dump(), request_options);
+
+  auto remaining = sse_parser.finalize();
+  for (const auto& sse_event : remaining) parser.feed(sse_event);
+
+  return snapshot;
+}
+
+Run ThreadsResource::create_and_run_poll(const ThreadCreateAndRunRequest& request) const {
+  return create_and_run_poll(request, RequestOptions{}, std::chrono::milliseconds(5000));
+}
+
+Run ThreadsResource::create_and_run_poll(const ThreadCreateAndRunRequest& request,
+                                         const RequestOptions& options,
+                                         std::chrono::milliseconds poll_interval) const {
+  auto run = create_and_run(request, options);
+  if (run.thread_id.empty()) {
+    throw OpenAIError("Run response missing thread_id for polling");
+  }
+
+  RunRetrieveParams params;
+  params.thread_id = run.thread_id;
+  return client_.runs().poll(run.id, params, options, poll_interval);
 }
 
 }  // namespace openai

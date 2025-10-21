@@ -22,7 +22,8 @@ This repository houses an in-progress native C++ port of the official `openai-no
 - ✅ `ThreadsResource` (beta create/retrieve/update/delete helpers)
 - ✅ `ThreadMessagesResource`, `RunStepsResource`, and `RunsResource` (beta messaging/run helpers)
 - ✅ Typed assistant SSE parser (thread/run/run-step/message events)
-- ✅ `RunsResource` streaming + polling helpers (`create_stream`, `submit_tool_outputs_stream`, `poll`, `create_and_run_poll`)
+- ✅ `RunsResource` streaming + polling/automation helpers (`create_stream`, `stream`, `submit_tool_outputs_stream`, `poll`, `create_and_run_poll`, `resolve_required_action`, `create_and_run_auto`)
+- ✅ `ThreadsResource` streaming helper (`create_and_run_stream`) for assistant SSE parity
 - 🚧 Additional endpoints (Chat, Responses, Files, etc.) to be implemented
 - 🚧 Streaming helpers, pagination helpers, and beta resources still pending
 
