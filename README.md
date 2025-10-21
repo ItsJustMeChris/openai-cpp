@@ -21,6 +21,7 @@ This repository houses an in-progress native C++ port of the official `openai-no
 - ✅ `AssistantsResource` (beta create/retrieve/update/list/delete helpers)
 - ✅ `ThreadsResource` (beta create/retrieve/update/delete helpers)
 - ✅ `ThreadMessagesResource`, `RunStepsResource`, and `RunsResource` (beta messaging/run helpers)
+- ✅ Typed assistant SSE parser (thread/run/run-step/message events)
 - 🚧 Additional endpoints (Chat, Responses, Files, etc.) to be implemented
 - 🚧 Streaming helpers, pagination helpers, and beta resources still pending
 

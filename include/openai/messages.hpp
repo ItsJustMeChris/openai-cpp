@@ -111,8 +111,21 @@ struct MessageDeleteResponse {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct MessageContentDeltaPart {
+  enum class Type { Text, ImageFile, ImageURL, Refusal, Raw };
+
+  int index = 0;
+  Type type = Type::Text;
+  std::optional<MessageTextContent> text;
+  std::optional<MessageContentPart::ImageFileData> image_file;
+  std::optional<MessageContentPart::ImageURLData> image_url;
+  std::optional<std::string> refusal;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct ThreadMessageDelta {
   std::optional<std::string> role;
+  std::vector<MessageContentDeltaPart> content;
   nlohmann::json raw = nlohmann::json::object();
 };
 

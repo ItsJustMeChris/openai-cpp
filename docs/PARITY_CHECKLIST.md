@@ -50,7 +50,8 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Assistants messages (beta thread messages)
 - [x] Assistants runs (beta create/retrieve/update/list/cancel/submit outputs)
 - [x] Run steps (beta list/retrieve)
-- [ ] Assistants run steps / streaming events / tool actions
+- [x] Assistants streaming events (typed parser)
+- [ ] Assistants tool runner actions & automation helpers
 - [ ] Fine-tuning
 - [ ] Moderations
 - [ ] Conversations

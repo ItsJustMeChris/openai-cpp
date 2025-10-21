@@ -14,31 +14,46 @@
 namespace openai {
 
 struct AssistantThreadEvent {
-  std::string event;
+  std::string name;
   Thread thread;
 };
 
 struct AssistantRunEvent {
-  std::string event;
+  std::string name;
   Run run;
 };
 
 struct AssistantRunStepEvent {
-  std::string event;
+  std::string name;
   RunStep run_step;
 };
 
+struct AssistantRunStepDeltaEvent {
+  std::string name;
+  RunStepDeltaEvent delta;
+};
+
 struct AssistantMessageEvent {
-  std::string event;
+  std::string name;
   ThreadMessage message;
 };
 
+struct AssistantMessageDeltaEvent {
+  std::string name;
+  ThreadMessageDeltaEvent delta;
+};
+
 struct AssistantErrorEvent {
-  std::string event;
+  std::string name;
   std::string error;
 };
 
-using AssistantStreamEvent = std::variant<AssistantThreadEvent, AssistantRunEvent, AssistantRunStepEvent, AssistantMessageEvent,
+using AssistantStreamEvent = std::variant<AssistantThreadEvent,
+                                          AssistantRunEvent,
+                                          AssistantRunStepEvent,
+                                          AssistantRunStepDeltaEvent,
+                                          AssistantMessageEvent,
+                                          AssistantMessageDeltaEvent,
                                           AssistantErrorEvent>;
 
 class AssistantStreamParser {
@@ -51,16 +66,6 @@ public:
 
 private:
   EventCallback callback_;
-  Thread last_thread_;
-  Run last_run_;
-  RunStep last_step_;
-  ThreadMessage last_message_;
-
-  void dispatch_thread(const std::string& event_name, const nlohmann::json& payload);
-  void dispatch_run(const std::string& event_name, const nlohmann::json& payload);
-  void dispatch_run_step(const std::string& event_name, const nlohmann::json& payload);
-  void dispatch_message(const std::string& event_name, const nlohmann::json& payload);
 };
 
 }  // namespace openai
-

@@ -207,6 +207,47 @@ MessageAttachment parse_attachment(const json& payload) {
   return attachment;
 }
 
+MessageContentDeltaPart parse_message_content_delta(const json& payload) {
+  MessageContentDeltaPart part;
+  part.raw = payload;
+  part.index = payload.value("index", 0);
+  const std::string type = payload.value("type", "");
+  if (type == "text") {
+    part.type = MessageContentDeltaPart::Type::Text;
+    if (payload.contains("text") && payload["text"].is_object()) {
+      part.text = parse_text_content(payload.at("text"));
+    }
+  } else if (type == "image_file") {
+    part.type = MessageContentDeltaPart::Type::ImageFile;
+    if (payload.contains("image_file") && payload["image_file"].is_object()) {
+      MessageContentPart::ImageFileData data;
+      data.file_id = payload.at("image_file").value("file_id", "");
+      if (payload.at("image_file").contains("detail") && payload.at("image_file").at("detail").is_string()) {
+        data.detail = payload.at("image_file").at("detail").get<std::string>();
+      }
+      part.image_file = data;
+    }
+  } else if (type == "image_url") {
+    part.type = MessageContentDeltaPart::Type::ImageURL;
+    if (payload.contains("image_url") && payload["image_url"].is_object()) {
+      MessageContentPart::ImageURLData data;
+      data.url = payload.at("image_url").value("url", "");
+      if (payload.at("image_url").contains("detail") && payload.at("image_url").at("detail").is_string()) {
+        data.detail = payload.at("image_url").at("detail").get<std::string>();
+      }
+      part.image_url = data;
+    }
+  } else if (type == "refusal") {
+    part.type = MessageContentDeltaPart::Type::Refusal;
+    if (payload.contains("refusal") && payload["refusal"].is_string()) {
+      part.refusal = payload["refusal"].get<std::string>();
+    }
+  } else {
+    part.type = MessageContentDeltaPart::Type::Raw;
+  }
+  return part;
+}
+
 ThreadMessage parse_thread_message_impl(const json& payload) {
   ThreadMessage message;
   message.raw = payload;
@@ -272,7 +313,7 @@ MessageDeleteResponse parse_delete_response(const json& payload) {
   return response;
 }
 
-ThreadMessageDeltaEvent parse_thread_message_delta_json(const nlohmann::json& payload) {
+ThreadMessageDeltaEvent parse_thread_message_delta_impl(const nlohmann::json& payload) {
   ThreadMessageDeltaEvent event;
   event.raw = payload;
   event.id = payload.value("id", "");
@@ -284,6 +325,11 @@ ThreadMessageDeltaEvent parse_thread_message_delta_json(const nlohmann::json& pa
     if (delta.contains("role") && delta["role"].is_string()) {
       message_delta.role = delta["role"].get<std::string>();
     }
+    if (delta.contains("content") && delta["content"].is_array()) {
+      for (const auto& item : delta.at("content")) {
+        message_delta.content.push_back(parse_message_content_delta(item));
+      }
+    }
     event.delta = message_delta;
   }
   return event;
@@ -293,6 +339,10 @@ ThreadMessageDeltaEvent parse_thread_message_delta_json(const nlohmann::json& pa
 
 ThreadMessage parse_thread_message_json(const nlohmann::json& payload) {
   return parse_thread_message_impl(payload);
+}
+
+ThreadMessageDeltaEvent parse_thread_message_delta_json(const nlohmann::json& payload) {
+  return parse_thread_message_delta_impl(payload);
 }
 
 ThreadMessage ThreadMessagesResource::create(const std::string& thread_id, const MessageCreateRequest& request) const {

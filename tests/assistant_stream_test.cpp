@@ -28,26 +28,36 @@ TEST(AssistantStreamParserTest, EmitsTypedEvents) {
                                 .data = R"({"id":"msg_1","object":"thread.message","created_at":1,"thread_id":"thread_1","role":"assistant","status":"completed","content":[],"attachments":[]})"};
   parser.feed(message_event);
 
+  ServerSentEvent message_delta{.event = std::make_optional<std::string>("thread.message.delta"),
+                                .data = R"({"id":"msg_1","object":"thread.message.delta","delta":{"content":[{"type":"text","index":0,"text":{"value":"Hi"}}]}})"};
+  parser.feed(message_delta);
+
   ServerSentEvent error_event{.event = std::make_optional<std::string>("error"),
                                .data = R"({"message":"stream failure"})"};
   parser.feed(error_event);
 
-  ASSERT_EQ(events.size(), 5u);
+  ASSERT_EQ(events.size(), 6u);
   EXPECT_TRUE(std::holds_alternative<AssistantThreadEvent>(events[0]));
   EXPECT_EQ(std::get<AssistantThreadEvent>(events[0]).thread.id, "thread_1");
 
   EXPECT_TRUE(std::holds_alternative<AssistantRunEvent>(events[1]));
   EXPECT_EQ(std::get<AssistantRunEvent>(events[1]).run.id, "run_1");
 
-  EXPECT_TRUE(std::holds_alternative<AssistantRunStepEvent>(events[2]));
-  const auto& step = std::get<AssistantRunStepEvent>(events[2]).run_step;
-  ASSERT_TRUE(step.details.tool_calls.size() == 1);
-  EXPECT_EQ(step.details.tool_calls[0].function->name, "lookup");
+  EXPECT_TRUE(std::holds_alternative<AssistantRunStepDeltaEvent>(events[2]));
+  const auto& step_delta_event = std::get<AssistantRunStepDeltaEvent>(events[2]).delta;
+  ASSERT_TRUE(step_delta_event.delta.details.has_value());
+  ASSERT_FALSE(step_delta_event.delta.details->tool_calls.empty());
+  EXPECT_EQ(step_delta_event.delta.details->tool_calls[0].function->name, "lookup");
 
   EXPECT_TRUE(std::holds_alternative<AssistantMessageEvent>(events[3]));
   EXPECT_EQ(std::get<AssistantMessageEvent>(events[3]).message.id, "msg_1");
 
-  EXPECT_TRUE(std::holds_alternative<AssistantErrorEvent>(events[4]));
-  EXPECT_EQ(std::get<AssistantErrorEvent>(events[4]).error, "stream failure");
-}
+  EXPECT_TRUE(std::holds_alternative<AssistantMessageDeltaEvent>(events[4]));
+  const auto& msg_delta_event = std::get<AssistantMessageDeltaEvent>(events[4]).delta;
+  ASSERT_FALSE(msg_delta_event.delta.content.empty());
+  ASSERT_TRUE(msg_delta_event.delta.content[0].text.has_value());
+  EXPECT_EQ(msg_delta_event.delta.content[0].text->value, "Hi");
 
+  EXPECT_TRUE(std::holds_alternative<AssistantErrorEvent>(events[5]));
+  EXPECT_EQ(std::get<AssistantErrorEvent>(events[5]).error, "stream failure");
+}

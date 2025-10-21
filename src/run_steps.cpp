@@ -254,7 +254,7 @@ RunStepDelta parse_run_step_delta_impl(const json& payload) {
   return delta;
 }
 
-RunStepDeltaEvent parse_run_step_delta_json(const nlohmann::json& payload) {
+RunStepDeltaEvent parse_run_step_delta_event_impl(const nlohmann::json& payload) {
   RunStepDeltaEvent event;
   event.raw = payload;
   event.id = payload.value("id", "");
@@ -273,6 +273,10 @@ RunStep parse_run_step_json(const nlohmann::json& payload) {
 
 RunStepList parse_run_step_list_json(const nlohmann::json& payload) {
   return parse_run_step_list_impl(payload);
+}
+
+RunStepDeltaEvent parse_run_step_delta_json(const nlohmann::json& payload) {
+  return parse_run_step_delta_event_impl(payload);
 }
 
 RunStep RunStepsResource::retrieve(const std::string& run_id,
