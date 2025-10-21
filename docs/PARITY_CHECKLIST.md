@@ -44,7 +44,9 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Audio speech (create)
 - [ ] Batches
 - [x] Vector stores (basic CRUD)
-- [ ] Vector store files/batches/search & assistants surface
+- [x] Vector store files/batches/search
+- [x] Assistants (beta create/retrieve/update/list/delete)
+- [ ] Assistants threads/messages/runs/tool actions
 - [ ] Fine-tuning
 - [ ] Moderations
 - [ ] Conversations

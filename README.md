@@ -18,6 +18,7 @@ This repository houses an in-progress native C++ port of the official `openai-no
 - ✅ `ImagesResource` (generate/edit/variation metadata; streaming events pending)
 - ✅ `AudioResource` transcriptions, translations, and speech (multipart upload / binary)
 - ✅ `VectorStoresResource` basic CRUD (beta header handling)
+- ✅ `AssistantsResource` (beta create/retrieve/update/list/delete helpers)
 - 🚧 Additional endpoints (Chat, Responses, Files, etc.) to be implemented
 - 🚧 Streaming helpers, pagination helpers, and beta resources still pending
 

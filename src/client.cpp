@@ -305,6 +305,7 @@ OpenAIClient::OpenAIClient(ClientOptions options,
       images_(*this),
       audio_(*this),
       vector_stores_(*this),
+      assistants_(*this),
       chat_(*this) {
   if (options_.api_key.empty()) {
     throw OpenAIError("ClientOptions.api_key must be set");
