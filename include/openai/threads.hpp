@@ -104,4 +104,6 @@ private:
   OpenAIClient& client_;
 };
 
+Thread parse_thread_json(const nlohmann::json& payload);
+
 }  // namespace openai

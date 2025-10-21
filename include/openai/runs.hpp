@@ -181,5 +181,7 @@ private:
   OpenAIClient& client_;
 };
 
-}  // namespace openai
+Run parse_run_json(const nlohmann::json& payload);
+RunList parse_run_list_json(const nlohmann::json& payload);
 
+}  // namespace openai

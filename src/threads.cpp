@@ -170,7 +170,7 @@ ThreadToolResources parse_tool_resources(const json& payload) {
   return resources;
 }
 
-Thread parse_thread(const json& payload) {
+Thread parse_thread_impl(const json& payload) {
   Thread thread;
   thread.raw = payload;
   thread.id = payload.value("id", "");
@@ -198,6 +198,10 @@ ThreadDeleteResponse parse_thread_delete(const json& payload) {
 
 }  // namespace
 
+Thread parse_thread_json(const nlohmann::json& payload) {
+  return parse_thread_impl(payload);
+}
+
 Thread ThreadsResource::create(const ThreadCreateRequest& request) const {
   return create(request, RequestOptions{});
 }
@@ -208,7 +212,7 @@ Thread ThreadsResource::create(const ThreadCreateRequest& request, const Request
   const auto body = create_request_to_json(request);
   auto response = client_.perform_request("POST", kThreadsPath, body.dump(), request_options);
   try {
-    return parse_thread(json::parse(response.body));
+    return parse_thread_impl(json::parse(response.body));
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse thread: ") + ex.what());
   }
@@ -223,7 +227,7 @@ Thread ThreadsResource::retrieve(const std::string& thread_id, const RequestOpti
   apply_beta_header(request_options);
   auto response = client_.perform_request("GET", std::string(kThreadsPath) + "/" + thread_id, "", request_options);
   try {
-    return parse_thread(json::parse(response.body));
+    return parse_thread_impl(json::parse(response.body));
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse thread: ") + ex.what());
   }
@@ -241,7 +245,7 @@ Thread ThreadsResource::update(const std::string& thread_id,
   const auto body = update_request_to_json(request);
   auto response = client_.perform_request("POST", std::string(kThreadsPath) + "/" + thread_id, body.dump(), request_options);
   try {
-    return parse_thread(json::parse(response.body));
+    return parse_thread_impl(json::parse(response.body));
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse thread: ") + ex.what());
   }
@@ -263,4 +267,3 @@ ThreadDeleteResponse ThreadsResource::remove(const std::string& thread_id, const
 }
 
 }  // namespace openai
-

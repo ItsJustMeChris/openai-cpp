@@ -291,7 +291,7 @@ RunRequiredAction parse_required_action(const json& payload) {
   return action;
 }
 
-Run parse_run(const json& payload) {
+Run parse_run_impl(const json& payload) {
   Run run;
   run.raw = payload;
   run.id = payload.value("id", "");
@@ -361,27 +361,35 @@ Run parse_run(const json& payload) {
   return run;
 }
 
-RunList parse_run_list(const json& payload) {
+RunList parse_run_list_impl(const json& payload) {
   RunList list;
   list.raw = payload;
   list.has_more = payload.value("has_more", false);
   if (payload.contains("first_id") && payload["first_id"].is_string()) list.first_id = payload["first_id"].get<std::string>();
   if (payload.contains("last_id") && payload["last_id"].is_string()) list.last_id = payload["last_id"].get<std::string>();
   if (payload.contains("data")) {
-    for (const auto& item : payload.at("data")) list.data.push_back(parse_run(item));
+    for (const auto& item : payload.at("data")) list.data.push_back(parse_run_impl(item));
   }
   return list;
 }
 
 Run parse_run_response(const std::string& body) {
   try {
-    return parse_run(json::parse(body));
+    return parse_run_impl(json::parse(body));
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse run: ") + ex.what());
   }
 }
 
 }  // namespace
+
+Run parse_run_json(const nlohmann::json& payload) {
+  return parse_run_impl(payload);
+}
+
+RunList parse_run_list_json(const nlohmann::json& payload) {
+  return parse_run_list_impl(payload);
+}
 
 Run RunsResource::create(const std::string& thread_id, const RunCreateRequest& request) const {
   return create(thread_id, request, RequestOptions{});
@@ -453,7 +461,7 @@ RunList RunsResource::list(const std::string& thread_id,
   if (params.status) request_options.query_params["status"] = *params.status;
   auto response = client_.perform_request("GET", runs_path(thread_id), "", request_options);
   try {
-    return parse_run_list(json::parse(response.body));
+    return parse_run_list_impl(json::parse(response.body));
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse run list: ") + ex.what());
   }

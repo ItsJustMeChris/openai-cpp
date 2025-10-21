@@ -22,6 +22,7 @@
 #include "openai/threads.hpp"
 #include "openai/messages.hpp"
 #include "openai/runs.hpp"
+#include "openai/run_steps.hpp"
 
 namespace openai {
 
@@ -147,6 +148,9 @@ public:
   RunsResource& runs() { return runs_; }
   const RunsResource& runs() const { return runs_; }
 
+  RunStepsResource& run_steps() { return run_steps_; }
+  const RunStepsResource& run_steps() const { return run_steps_; }
+
   ChatResource& chat() { return chat_; }
   const ChatResource& chat() const { return chat_; }
 
@@ -169,6 +173,7 @@ private:
   friend class ThreadsResource;
   friend class ThreadMessagesResource;
   friend class RunsResource;
+  friend class RunStepsResource;
   friend class ChatCompletionsResource;
 
   HttpResponse perform_request(const std::string& method,
@@ -193,6 +198,7 @@ private:
   ThreadsResource threads_;
   ThreadMessagesResource thread_messages_;
   RunsResource runs_;
+  RunStepsResource run_steps_;
   ChatResource chat_;
 };
 

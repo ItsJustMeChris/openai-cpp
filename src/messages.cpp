@@ -207,7 +207,7 @@ MessageAttachment parse_attachment(const json& payload) {
   return attachment;
 }
 
-ThreadMessage parse_message(const json& payload) {
+ThreadMessage parse_thread_message_impl(const json& payload) {
   ThreadMessage message;
   message.raw = payload;
   message.id = payload.value("id", "");
@@ -257,7 +257,7 @@ MessageList parse_list(const json& payload) {
   if (payload.contains("last_id") && payload["last_id"].is_string()) list.last_id = payload["last_id"].get<std::string>();
   if (payload.contains("data")) {
     for (const auto& item : payload.at("data")) {
-      list.data.push_back(parse_message(item));
+      list.data.push_back(parse_thread_message_impl(item));
     }
   }
   return list;
@@ -274,6 +274,10 @@ MessageDeleteResponse parse_delete_response(const json& payload) {
 
 }  // namespace
 
+ThreadMessage parse_thread_message_json(const nlohmann::json& payload) {
+  return parse_thread_message_impl(payload);
+}
+
 ThreadMessage ThreadMessagesResource::create(const std::string& thread_id, const MessageCreateRequest& request) const {
   return create(thread_id, request, RequestOptions{});
 }
@@ -286,7 +290,7 @@ ThreadMessage ThreadMessagesResource::create(const std::string& thread_id,
   const auto body = create_request_to_json(request);
   auto response = client_.perform_request("POST", build_thread_messages_path(thread_id), body.dump(), request_options);
   try {
-    return parse_message(json::parse(response.body));
+    return parse_thread_message_impl(json::parse(response.body));
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse thread message: ") + ex.what());
   }
@@ -304,7 +308,7 @@ ThreadMessage ThreadMessagesResource::retrieve(const std::string& thread_id,
   auto response = client_.perform_request("GET", build_thread_messages_path(thread_id) + "/" + message_id, "",
                                           request_options);
   try {
-    return parse_message(json::parse(response.body));
+    return parse_thread_message_impl(json::parse(response.body));
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse thread message: ") + ex.what());
   }
@@ -326,7 +330,7 @@ ThreadMessage ThreadMessagesResource::update(const std::string& thread_id,
   auto response = client_.perform_request("POST", build_thread_messages_path(thread_id) + "/" + message_id, body.dump(),
                                           request_options);
   try {
-    return parse_message(json::parse(response.body));
+    return parse_thread_message_impl(json::parse(response.body));
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse thread message: ") + ex.what());
   }
@@ -381,4 +385,3 @@ MessageList ThreadMessagesResource::list(const std::string& thread_id,
 }
 
 }  // namespace openai
-
