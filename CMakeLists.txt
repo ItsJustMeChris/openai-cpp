@@ -22,6 +22,7 @@ add_library(openai-cpp
     src/vector_stores.cpp
     src/assistants.cpp
     src/threads.cpp
+    src/messages.cpp
     src/streaming.cpp
 )
 

@@ -20,6 +20,7 @@
 #include "openai/vector_stores.hpp"
 #include "openai/assistants.hpp"
 #include "openai/threads.hpp"
+#include "openai/messages.hpp"
 
 namespace openai {
 
@@ -139,6 +140,9 @@ public:
   ThreadsResource& threads() { return threads_; }
   const ThreadsResource& threads() const { return threads_; }
 
+  ThreadMessagesResource& thread_messages() { return thread_messages_; }
+  const ThreadMessagesResource& thread_messages() const { return thread_messages_; }
+
   ChatResource& chat() { return chat_; }
   const ChatResource& chat() const { return chat_; }
 
@@ -159,6 +163,7 @@ private:
   friend class VectorStoresResource;
   friend class AssistantsResource;
   friend class ThreadsResource;
+  friend class ThreadMessagesResource;
   friend class ChatCompletionsResource;
 
   HttpResponse perform_request(const std::string& method,
@@ -181,6 +186,7 @@ private:
   VectorStoresResource vector_stores_;
   AssistantsResource assistants_;
   ThreadsResource threads_;
+  ThreadMessagesResource thread_messages_;
   ChatResource chat_;
 };
 
