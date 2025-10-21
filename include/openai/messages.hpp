@@ -111,6 +111,18 @@ struct MessageDeleteResponse {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct ThreadMessageDelta {
+  std::optional<std::string> role;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ThreadMessageDeltaEvent {
+  std::string id;
+  ThreadMessageDelta delta;
+  std::string object;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct RequestOptions;
 class OpenAIClient;
 
@@ -142,5 +154,6 @@ private:
 };
 
 ThreadMessage parse_thread_message_json(const nlohmann::json& payload);
+ThreadMessageDeltaEvent parse_thread_message_delta_json(const nlohmann::json& payload);
 
 }  // namespace openai

@@ -90,6 +90,29 @@ struct RunStepDetails {
   std::vector<ToolCallDetails> tool_calls;
 };
 
+struct MessageCreationDeltaDetails {
+  std::optional<std::string> message_id;
+};
+
+struct RunStepDeltaDetails {
+  enum class Type { MessageCreation, ToolCalls };
+  Type type = Type::ToolCalls;
+  std::optional<MessageCreationDeltaDetails> message_creation;
+  std::vector<ToolCallDelta> tool_calls;
+};
+
+struct RunStepDelta {
+  std::optional<RunStepDeltaDetails> details;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct RunStepDeltaEvent {
+  std::string id;
+  RunStepDelta delta;
+  std::string object;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct RunStepUsage {
   int completion_tokens = 0;
   int prompt_tokens = 0;
@@ -158,5 +181,6 @@ private:
 
 RunStep parse_run_step_json(const nlohmann::json& payload);
 RunStepList parse_run_step_list_json(const nlohmann::json& payload);
+RunStepDeltaEvent parse_run_step_delta_json(const nlohmann::json& payload);
 
 }  // namespace openai

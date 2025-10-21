@@ -227,6 +227,44 @@ RunStepList parse_run_step_list_response(const std::string& body) {
   }
 }
 
+RunStepDelta parse_run_step_delta_impl(const json& payload) {
+  RunStepDelta delta;
+  delta.raw = payload;
+  if (payload.contains("step_details") && payload["step_details"].is_object()) {
+    RunStepDeltaDetails details;
+    const auto& details_json = payload.at("step_details");
+    const std::string type = details_json.value("type", "");
+    if (type == "message_creation") {
+      details.type = RunStepDeltaDetails::Type::MessageCreation;
+      if (details_json.contains("message_creation") && details_json["message_creation"].is_object()) {
+        MessageCreationDeltaDetails creation;
+        creation.message_id = details_json.at("message_creation").value("message_id", std::string());
+        details.message_creation = creation;
+      }
+    } else {
+      details.type = RunStepDeltaDetails::Type::ToolCalls;
+      if (details_json.contains("tool_calls") && details_json["tool_calls"].is_array()) {
+        for (const auto& call : details_json.at("tool_calls")) {
+          details.tool_calls.push_back(parse_tool_call_delta(call));
+        }
+      }
+    }
+    delta.details = details;
+  }
+  return delta;
+}
+
+RunStepDeltaEvent parse_run_step_delta_json(const nlohmann::json& payload) {
+  RunStepDeltaEvent event;
+  event.raw = payload;
+  event.id = payload.value("id", "");
+  event.object = payload.value("object", "");
+  if (payload.contains("delta") && payload["delta"].is_object()) {
+    event.delta = parse_run_step_delta_impl(payload.at("delta"));
+  }
+  return event;
+}
+
 }  // namespace
 
 RunStep parse_run_step_json(const nlohmann::json& payload) {

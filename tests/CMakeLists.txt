@@ -24,6 +24,7 @@ add_executable(openai-cpp-tests
     ${CMAKE_CURRENT_LIST_DIR}/assistants_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/threads_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/messages_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/assistant_stream_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/run_steps_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/runs_test.cpp
 )

@@ -272,6 +272,23 @@ MessageDeleteResponse parse_delete_response(const json& payload) {
   return response;
 }
 
+ThreadMessageDeltaEvent parse_thread_message_delta_json(const nlohmann::json& payload) {
+  ThreadMessageDeltaEvent event;
+  event.raw = payload;
+  event.id = payload.value("id", "");
+  event.object = payload.value("object", "");
+  if (payload.contains("delta") && payload["delta"].is_object()) {
+    const auto& delta = payload.at("delta");
+    ThreadMessageDelta message_delta;
+    message_delta.raw = delta;
+    if (delta.contains("role") && delta["role"].is_string()) {
+      message_delta.role = delta["role"].get<std::string>();
+    }
+    event.delta = message_delta;
+  }
+  return event;
+}
+
 }  // namespace
 
 ThreadMessage parse_thread_message_json(const nlohmann::json& payload) {
