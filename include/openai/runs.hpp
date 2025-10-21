@@ -11,6 +11,7 @@
 #include "openai/assistants.hpp"
 #include "openai/threads.hpp"
 #include "openai/messages.hpp"
+#include "openai/run_steps.hpp"
 
 namespace openai {
 
@@ -147,6 +148,49 @@ struct RunSubmitToolOutputsRequest {
   std::optional<bool> stream;
 };
 
+struct AssistantThreadEvent {
+  std::string name;
+  Thread thread;
+};
+
+struct AssistantRunEvent {
+  std::string name;
+  Run run;
+};
+
+struct AssistantRunStepEvent {
+  std::string name;
+  RunStep run_step;
+};
+
+struct AssistantRunStepDeltaEvent {
+  std::string name;
+  RunStepDeltaEvent delta;
+};
+
+struct AssistantMessageEvent {
+  std::string name;
+  ThreadMessage message;
+};
+
+struct AssistantMessageDeltaEvent {
+  std::string name;
+  ThreadMessageDeltaEvent delta;
+};
+
+struct AssistantErrorEvent {
+  std::string name;
+  std::string error;
+};
+
+using AssistantStreamEvent = std::variant<AssistantThreadEvent,
+                                          AssistantRunEvent,
+                                          AssistantRunStepEvent,
+                                          AssistantRunStepDeltaEvent,
+                                          AssistantMessageEvent,
+                                          AssistantMessageDeltaEvent,
+                                          AssistantErrorEvent>;
+
 struct RequestOptions;
 class OpenAIClient;
 
@@ -176,6 +220,19 @@ public:
                           const RunSubmitToolOutputsRequest& request) const;
   Run submit_tool_outputs(const std::string& thread_id, const std::string& run_id,
                           const RunSubmitToolOutputsRequest& request, const RequestOptions& options) const;
+
+  std::vector<AssistantStreamEvent> create_stream(const std::string& thread_id, const RunCreateRequest& request) const;
+  std::vector<AssistantStreamEvent> create_stream(const std::string& thread_id,
+                                                  const RunCreateRequest& request,
+                                                  const RequestOptions& options) const;
+
+  std::vector<AssistantStreamEvent> submit_tool_outputs_stream(const std::string& thread_id,
+                                                               const std::string& run_id,
+                                                               const RunSubmitToolOutputsRequest& request) const;
+  std::vector<AssistantStreamEvent> submit_tool_outputs_stream(const std::string& thread_id,
+                                                               const std::string& run_id,
+                                                               const RunSubmitToolOutputsRequest& request,
+                                                               const RequestOptions& options) const;
 
 private:
   OpenAIClient& client_;

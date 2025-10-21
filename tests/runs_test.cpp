@@ -2,6 +2,7 @@
 
 #include "openai/client.hpp"
 #include "openai/runs.hpp"
+#include "openai/assistant_stream.hpp"
 #include "support/mock_http_client.hpp"
 
 #include <nlohmann/json.hpp>
@@ -136,4 +137,44 @@ TEST(RunsResourceTest, ListAndSubmitToolOutputs) {
   submit.outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call_1", .output = "result"});
   auto run = client.runs().submit_tool_outputs("thread_1", "run_1", submit);
   EXPECT_EQ(run.status, "in_progress");
+}
+
+TEST(RunsResourceTest, CreateStreamCollectsEvents) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string sse =
+      "event: thread.created\n"
+      "data: {\"id\":\"thread_1\",\"object\":\"thread\",\"created_at\":1}\n\n"
+      "event: thread.run.created\n"
+      "data: {\"id\":\"run_1\",\"assistant_id\":\"asst_1\",\"created_at\":1,\"model\":\"gpt-4o\",\"object\":\"thread.run\",\"parallel_tool_calls\":false,\"status\":\"in_progress\",\"thread_id\":\"thread_1\",\"tools\":[]}\n\n"
+      "event: thread.run.step.delta\n"
+      "data: {\"id\":\"step_1\",\"object\":\"thread.run.step.delta\",\"delta\":{\"step_details\":{\"type\":\"tool_calls\",\"tool_calls\":[{\"type\":\"function\",\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"lookup\",\"arguments\":\"{}\"}}]}}}\n\n"
+      "event: thread.message.delta\n"
+      "data: {\"id\":\"msg_1\",\"object\":\"thread.message.delta\",\"delta\":{\"content\":[{\"type\":\"text\",\"index\":0,\"text\":{\"value\":\"partial\"}}]}}\n\n"
+      "event: thread.run.completed\n"
+      "data: {\"id\":\"run_1\",\"assistant_id\":\"asst_1\",\"created_at\":1,\"model\":\"gpt-4o\",\"object\":\"thread.run\",\"parallel_tool_calls\":false,\"status\":\"completed\",\"thread_id\":\"thread_1\",\"tools\":[]}\n\n"
+      "event: thread.message.completed\n"
+      "data: {\"id\":\"msg_1\",\"object\":\"thread.message\",\"created_at\":1,\"thread_id\":\"thread_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[],\"attachments\":[]}\n\n";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, sse});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  RunCreateRequest request;
+  request.assistant_id = "asst_1";
+
+  auto events = client.runs().create_stream("thread_1", request);
+  ASSERT_EQ(events.size(), 6u);
+  EXPECT_TRUE(std::holds_alternative<AssistantThreadEvent>(events[0]));
+  EXPECT_TRUE(std::holds_alternative<AssistantRunEvent>(events[1]));
+  EXPECT_TRUE(std::holds_alternative<AssistantRunStepDeltaEvent>(events[2]));
+  EXPECT_TRUE(std::holds_alternative<AssistantMessageDeltaEvent>(events[3]));
+  EXPECT_TRUE(std::holds_alternative<AssistantRunEvent>(events[4]));
+  EXPECT_TRUE(std::holds_alternative<AssistantMessageEvent>(events[5]));
 }

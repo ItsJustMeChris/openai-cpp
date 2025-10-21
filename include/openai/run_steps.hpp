@@ -11,7 +11,6 @@
 #include "openai/assistants.hpp"
 #include "openai/threads.hpp"
 #include "openai/messages.hpp"
-#include "openai/runs.hpp"
 
 namespace openai {
 
@@ -23,6 +22,11 @@ struct CodeInterpreterLogOutput {
 struct CodeInterpreterImageOutput {
   int index = 0;
   std::string file_id;
+};
+
+struct RunStepLastError {
+  std::string code;
+  std::string message;
 };
 
 struct CodeInterpreterToolCallDetails {
@@ -127,7 +131,7 @@ struct RunStep {
   int created_at = 0;
   std::optional<int> expired_at;
   std::optional<int> failed_at;
-  std::optional<RunLastError> last_error;
+  std::optional<RunStepLastError> last_error;
   std::map<std::string, std::string> metadata;
   std::string object;
   std::string run_id;

@@ -2,6 +2,8 @@
 
 #include "openai/client.hpp"
 #include "openai/error.hpp"
+#include "openai/assistant_stream.hpp"
+#include "openai/streaming.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -495,6 +497,91 @@ Run RunsResource::submit_tool_outputs(const std::string& thread_id,
   auto response = client_.perform_request("POST", runs_path(thread_id) + "/" + run_id + "/submit_tool_outputs",
                                           body.dump(), request_options);
   return parse_run_response(response.body);
+}
+
+std::vector<AssistantStreamEvent> RunsResource::create_stream(const std::string& thread_id,
+                                                              const RunCreateRequest& request) const {
+  return create_stream(thread_id, request, RequestOptions{});
+}
+
+std::vector<AssistantStreamEvent> RunsResource::create_stream(const std::string& thread_id,
+                                                              const RunCreateRequest& request,
+                                                              const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_beta_header(request_options);
+  request_options.collect_body = false;
+
+  RunCreateRequest streaming_request = request;
+  streaming_request.stream = true;
+
+  SSEParser sse_parser;
+  std::vector<AssistantStreamEvent> events;
+  AssistantStreamParser parser([&](const AssistantStreamEvent& ev) { events.push_back(ev); });
+
+  request_options.on_chunk = [&](const char* data, std::size_t size) {
+    auto sse_events = sse_parser.feed(data, size);
+    for (const auto& sse_event : sse_events) {
+      parser.feed(sse_event);
+    }
+  };
+
+  if (streaming_request.include && !streaming_request.include->empty()) {
+    std::string joined;
+    for (size_t i = 0; i < streaming_request.include->size(); ++i) {
+      if (i > 0) joined += ",";
+      joined += (*streaming_request.include)[i];
+    }
+    request_options.query_params["include"] = std::move(joined);
+  }
+
+  const auto body = create_request_to_json(streaming_request);
+  client_.perform_request("POST", runs_path(thread_id), body.dump(), request_options);
+
+  auto remaining = sse_parser.finalize();
+  for (const auto& sse_event : remaining) {
+    parser.feed(sse_event);
+  }
+
+  return events;
+}
+
+std::vector<AssistantStreamEvent> RunsResource::submit_tool_outputs_stream(
+    const std::string& thread_id, const std::string& run_id, const RunSubmitToolOutputsRequest& request) const {
+  return submit_tool_outputs_stream(thread_id, run_id, request, RequestOptions{});
+}
+
+std::vector<AssistantStreamEvent> RunsResource::submit_tool_outputs_stream(
+    const std::string& thread_id,
+    const std::string& run_id,
+    const RunSubmitToolOutputsRequest& request,
+    const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_beta_header(request_options);
+  request_options.collect_body = false;
+
+  RunSubmitToolOutputsRequest streaming_request = request;
+  streaming_request.stream = true;
+
+  SSEParser sse_parser;
+  std::vector<AssistantStreamEvent> events;
+  AssistantStreamParser parser([&](const AssistantStreamEvent& ev) { events.push_back(ev); });
+
+  request_options.on_chunk = [&](const char* data, std::size_t size) {
+    auto sse_events = sse_parser.feed(data, size);
+    for (const auto& sse_event : sse_events) {
+      parser.feed(sse_event);
+    }
+  };
+
+  const auto body = submit_tool_outputs_to_json(streaming_request);
+  client_.perform_request("POST", runs_path(thread_id) + "/" + run_id + "/submit_tool_outputs", body.dump(), request_options);
+
+  auto remaining = sse_parser.finalize();
+  for (const auto& sse_event : remaining) {
+    parser.feed(sse_event);
+  }
+
+  return events;
 }
 
 }  // namespace openai

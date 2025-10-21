@@ -97,7 +97,7 @@ FunctionToolCallDetails parse_function_call(const json& payload) {
     const auto& fn = payload.at("function");
     call.name = fn.value("name", "");
     call.arguments = fn.value("arguments", "");
-    if (!fn.at("output").is_null()) call.output = fn.at("output").get<std::string>();
+    if (fn.contains("output") && !fn.at("output").is_null()) call.output = fn.at("output").get<std::string>();
   }
   return call;
 }
@@ -176,7 +176,7 @@ RunStep parse_run_step_impl(const json& payload) {
   if (payload.contains("expired_at") && !payload["expired_at"].is_null()) step.expired_at = payload["expired_at"].get<int>();
   if (payload.contains("failed_at") && !payload["failed_at"].is_null()) step.failed_at = payload["failed_at"].get<int>();
   if (payload.contains("last_error") && payload["last_error"].is_object()) {
-    RunLastError error;
+    RunStepLastError error;
     error.code = payload.at("last_error").value("code", "");
     error.message = payload.at("last_error").value("message", "");
     step.last_error = error;
