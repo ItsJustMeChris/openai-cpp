@@ -1778,6 +1778,72 @@ ResponseOutputItem parse_output_item(const json& payload) {
   return item;
 }
 
+ResponseItem parse_response_item(const json& payload) {
+  ResponseItem item;
+  item.raw = payload;
+  item.type = payload.value("type", std::string{});
+
+  if (item.type == "input_text") {
+    ResponseInputTextItem text;
+    text.raw = payload;
+    text.text = payload.value("text", std::string{});
+    item.input_text = std::move(text);
+  } else if (item.type == "input_image") {
+    ResponseInputImageItem image;
+    image.raw = payload;
+    if (payload.contains("image_url") && payload.at("image_url").is_string()) {
+      image.image_url = payload.at("image_url").get<std::string>();
+    }
+    if (payload.contains("file_id") && payload.at("file_id").is_string()) {
+      image.file_id = payload.at("file_id").get<std::string>();
+    }
+    if (payload.contains("detail") && payload.at("detail").is_string()) {
+      image.detail = payload.at("detail").get<std::string>();
+    }
+    item.input_image = std::move(image);
+  } else if (item.type == "input_file") {
+    ResponseInputFileItem file;
+    file.raw = payload;
+    if (payload.contains("file_data") && payload.at("file_data").is_string()) {
+      file.file_data = payload.at("file_data").get<std::string>();
+    }
+    if (payload.contains("file_id") && payload.at("file_id").is_string()) {
+      file.file_id = payload.at("file_id").get<std::string>();
+    }
+    if (payload.contains("file_url") && payload.at("file_url").is_string()) {
+      file.file_url = payload.at("file_url").get<std::string>();
+    }
+    if (payload.contains("filename") && payload.at("filename").is_string()) {
+      file.filename = payload.at("filename").get<std::string>();
+    }
+    item.input_file = std::move(file);
+  } else if (item.type == "input_audio") {
+    ResponseInputAudioItem audio;
+    audio.raw = payload;
+    if (payload.contains("input_audio") && payload.at("input_audio").is_object()) {
+      const auto& audio_json = payload.at("input_audio");
+      if (audio_json.contains("data") && audio_json.at("data").is_string()) {
+        audio.data = audio_json.at("data").get<std::string>();
+      }
+      if (audio_json.contains("format") && audio_json.at("format").is_string()) {
+        audio.format = audio_json.at("format").get<std::string>();
+      }
+    } else {
+      audio.data = payload.value("data", std::string{});
+      audio.format = payload.value("format", std::string{});
+    }
+    item.input_audio = std::move(audio);
+  } else {
+    auto output = parse_output_item(payload);
+    item.output_item = std::move(output);
+    if (!item.output_item->item_type.empty()) {
+      item.type = item.output_item->item_type;
+    }
+  }
+
+  return item;
+}
+
 void ensure_model_present(const json& body) {
   if (!body.contains("model") || body.at("model").is_null()) {
     throw OpenAIError("ResponsesRequest body must include a model");
@@ -2080,6 +2146,24 @@ ResponseList parse_response_list(const json& payload) {
   return list;
 }
 
+ResponseItemList parse_response_item_list(const json& payload) {
+  ResponseItemList list;
+  list.raw = payload;
+  if (payload.contains("data")) {
+    for (const auto& element : payload.at("data")) {
+      list.data.push_back(parse_response_item(element));
+    }
+  }
+  list.has_more = payload.value("has_more", false);
+  if (payload.contains("first_id") && payload.at("first_id").is_string()) {
+    list.first_id = payload.at("first_id").get<std::string>();
+  }
+  if (payload.contains("last_id") && payload.at("last_id").is_string()) {
+    list.last_id = payload.at("last_id").get<std::string>();
+  }
+  return list;
+}
+
 json build_retrieve_query(const ResponseRetrieveOptions& options) {
   json query = json::object();
   query["stream"] = options.stream;
@@ -2280,6 +2364,52 @@ std::vector<ServerSentEvent> ResponsesResource::retrieve_stream(const std::strin
 
 std::vector<ServerSentEvent> ResponsesResource::retrieve_stream(const std::string& response_id) const {
   return retrieve_stream(response_id, ResponseRetrieveOptions{.stream = true}, RequestOptions{});
+}
+
+ResponseItemList ResponsesResource::InputItemsResource::list(const std::string& response_id) const {
+  return list(response_id, ResponseInputItemListParams{}, RequestOptions{});
+}
+
+ResponseItemList ResponsesResource::InputItemsResource::list(const std::string& response_id,
+                                                             const ResponseInputItemListParams& params) const {
+  return list(response_id, params, RequestOptions{});
+}
+
+ResponseItemList ResponsesResource::InputItemsResource::list(const std::string& response_id,
+                                                             const ResponseInputItemListParams& params,
+                                                             const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  json query = request_options.query.value_or(json::object());
+  if (!query.is_object()) {
+    query = json::object();
+  }
+  if (params.include && !params.include->empty()) {
+    query["include"] = *params.include;
+  }
+  if (params.order) {
+    query["order"] = *params.order;
+  }
+  if (params.after) {
+    query["after"] = *params.after;
+  }
+  if (params.before) {
+    query["before"] = *params.before;
+  }
+  if (params.limit) {
+    query["limit"] = *params.limit;
+  }
+  if (!query.empty()) {
+    request_options.query = query;
+  }
+
+  auto path = std::string(kResponseEndpoint) + "/" + response_id + "/input_items";
+  auto response = client_.perform_request("GET", path, "", request_options);
+  try {
+    auto payload = json::parse(response.body);
+    return parse_response_item_list(payload);
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse response input items: ") + ex.what());
+  }
 }
 
 }  // namespace openai

@@ -867,6 +867,32 @@ struct ResponseList {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct ResponseItem {
+  std::string type;
+  std::optional<ResponseOutputItem> output_item;
+  std::optional<ResponseInputTextItem> input_text;
+  std::optional<ResponseInputImageItem> input_image;
+  std::optional<ResponseInputFileItem> input_file;
+  std::optional<ResponseInputAudioItem> input_audio;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseItemList {
+  std::vector<ResponseItem> data;
+  bool has_more = false;
+  std::optional<std::string> first_id;
+  std::optional<std::string> last_id;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseInputItemListParams {
+  std::optional<std::vector<std::string>> include;
+  std::optional<std::string> order;
+  std::optional<std::string> after;
+  std::optional<std::string> before;
+  std::optional<int> limit;
+};
+
 struct ResponseTextDeltaEvent {
   int content_index = 0;
   std::string delta;
@@ -929,7 +955,22 @@ class CursorPage;
 
 class ResponsesResource {
 public:
-  explicit ResponsesResource(OpenAIClient& client) : client_(client) {}
+  class InputItemsResource {
+  public:
+    explicit InputItemsResource(OpenAIClient& client) : client_(client) {}
+
+    ResponseItemList list(const std::string& response_id) const;
+    ResponseItemList list(const std::string& response_id,
+                          const ResponseInputItemListParams& params) const;
+    ResponseItemList list(const std::string& response_id,
+                          const ResponseInputItemListParams& params,
+                          const struct RequestOptions& options) const;
+
+  private:
+    OpenAIClient& client_;
+  };
+
+  explicit ResponsesResource(OpenAIClient& client) : client_(client), input_items_(client) {}
 
   Response create(const ResponseRequest& request) const;
   Response create(const ResponseRequest& request, const struct RequestOptions& options) const;
@@ -964,8 +1005,12 @@ public:
                                                const ResponseRetrieveOptions& retrieve_options,
                                                const struct RequestOptions& options) const;
 
+  InputItemsResource& input_items() { return input_items_; }
+  const InputItemsResource& input_items() const { return input_items_; }
+
 private:
   OpenAIClient& client_;
+  InputItemsResource input_items_;
 };
 
 }  // namespace openai

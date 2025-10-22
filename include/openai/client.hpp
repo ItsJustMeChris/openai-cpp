@@ -208,6 +208,7 @@ private:
   friend class EmbeddingsResource;
   friend class ModerationsResource;
   friend class ResponsesResource;
+  friend class ResponsesResource::InputItemsResource;
   friend class FilesResource;
   friend class ImagesResource;
   friend class AudioTranscriptionsResource;

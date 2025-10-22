@@ -435,6 +435,58 @@ TEST(ResponsesResourceTest, ListParsesResponsesArray) {
   EXPECT_NE(mock_ptr->last_request()->url.find("/responses"), std::string::npos);
 }
 
+TEST(ResponsesResourceTest, InputItemsListFetchesAndParsesItems) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string body = R"({
+    "data": [
+      {"type":"input_text","id":"item_1","text":"Hello world"},
+      {"type":"message","id":"msg_1","role":"assistant","content":[{"type":"output_text","text":"Hi!"}]},
+      {"type":"function_call","id":"call_1","name":"lookup","arguments":"{}"}
+    ],
+    "first_id":"item_1",
+    "last_id":"call_1",
+    "has_more":false
+  })";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, body});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  ResponseInputItemListParams params;
+  params.include = std::vector<std::string>{"messages"};
+  params.order = "asc";
+  params.limit = 10;
+
+  auto items = client.responses().input_items().list("resp_123", params);
+  ASSERT_EQ(items.data.size(), 3u);
+  EXPECT_FALSE(items.has_more);
+  ASSERT_TRUE(items.first_id.has_value());
+  EXPECT_EQ(*items.first_id, "item_1");
+  ASSERT_TRUE(items.last_id.has_value());
+  EXPECT_EQ(*items.last_id, "call_1");
+
+  ASSERT_TRUE(items.data[0].input_text.has_value());
+  EXPECT_EQ(items.data[0].input_text->text, "Hello world");
+  ASSERT_TRUE(items.data[1].output_item.has_value());
+  ASSERT_TRUE(items.data[1].output_item->message.has_value());
+  EXPECT_EQ(items.data[1].output_item->message->role, "assistant");
+  ASSERT_TRUE(items.data[2].output_item.has_value());
+  EXPECT_EQ(items.data[2].output_item->item_type, "function_call");
+
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  const auto& request = *mock_ptr->last_request();
+  EXPECT_EQ(request.method, "GET");
+  EXPECT_NE(request.url.find("/responses/resp_123/input_items"), std::string::npos);
+  EXPECT_NE(request.url.find("order=asc"), std::string::npos);
+}
+
 TEST(ResponsesResourceTest, CreateSerializesTypedFields) {
   using namespace openai;
 
