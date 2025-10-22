@@ -2,6 +2,7 @@
 
 #include "openai/client.hpp"
 #include "openai/utils/platform.hpp"
+#include "openai/logging.hpp"
 #include "openai/error.hpp"
 
 #include "support/mock_http_client.hpp"
@@ -13,6 +14,7 @@ using openai::RequestOptions;
 using openai::AuthenticationError;
 using openai::BadRequestError;
 using openai::InternalServerError;
+using openai::LogLevel;
 namespace mock = openai::testing;
 namespace utils = openai::utils;
 
@@ -55,6 +57,56 @@ TEST(OpenAIClientPlatformTest, AddsPlatformHeadersAndUserAgent) {
   auto it = headers.find("User-Agent");
   ASSERT_NE(it, headers.end());
   EXPECT_EQ(it->second, utils::user_agent());
+}
+
+TEST(OpenAIClientLoggingTest, EmitsLogsWithSanitizedHeaders) {
+  auto http_mock = std::make_unique<mock::MockHttpClient>();
+  auto* mock_ptr = http_mock.get();
+
+  HttpResponse response;
+  response.status_code = 200;
+  response.body = R"({"object":"list","data":[]})";
+  response.headers["Set-Cookie"] = "secret";
+  mock_ptr->enqueue_response(response);
+
+  std::vector<std::tuple<LogLevel, std::string, nlohmann::json>> logs;
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+  options.logger = [&](LogLevel level, const std::string& message, const nlohmann::json& details) {
+    logs.emplace_back(level, message, details);
+  };
+  options.log_level = LogLevel::Debug;
+
+  OpenAIClient client(std::move(options), std::move(http_mock));
+
+  auto list = client.models().list();
+  (void)list;
+
+  ASSERT_FALSE(logs.empty());
+  bool found_request_log = false;
+  bool found_response_log = false;
+  for (const auto& entry : logs) {
+    const auto& level = std::get<0>(entry);
+    const auto& details = std::get<2>(entry);
+    if (std::get<1>(entry) == "sending request") {
+      found_request_log = true;
+      ASSERT_TRUE(details.contains("headers"));
+      const auto& headers = details.at("headers");
+      ASSERT_TRUE(headers.contains("Authorization"));
+      EXPECT_EQ(headers.at("Authorization"), "***");
+    }
+    if (std::get<1>(entry) == "request succeeded") {
+      found_response_log = true;
+      ASSERT_TRUE(details.contains("response_headers"));
+      const auto& headers = details.at("response_headers");
+      ASSERT_TRUE(headers.contains("Set-Cookie"));
+      EXPECT_EQ(headers.at("Set-Cookie"), "***");
+      EXPECT_EQ(level, LogLevel::Info);
+    }
+  }
+  EXPECT_TRUE(found_request_log);
+  EXPECT_TRUE(found_response_log);
 }
 
 TEST(OpenAIClientRetryTest, RetriesOnServerError) {

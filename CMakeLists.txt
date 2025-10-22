@@ -16,6 +16,7 @@ add_library(openai-cpp
     src/utils/multipart.cpp
     src/utils/uuid.cpp
     src/utils/platform.cpp
+    src/logging.cpp
     src/chat.cpp
     src/moderations.cpp
     src/responses.cpp

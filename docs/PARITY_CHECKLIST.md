@@ -12,7 +12,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Pagination abstractions (`AbstractPage`, cursor/page responses)
 - [x] Multipart uploads (`Uploads` helper, file chunking strategies)
 - [x] Error hierarchy mirroring `core/error.ts`
-- [ ] Logging hooks and middleware support
+- [x] Logging hooks and middleware support
 
 ## Internal Utilities
 - [ ] Query string builder (`internal/qs`)

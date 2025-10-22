@@ -7,8 +7,12 @@
 #include <optional>
 #include <cstddef>
 #include <string>
+#include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include "openai/completions.hpp"
+#include "openai/logging.hpp"
 #include "openai/http_client.hpp"
 #include "openai/error.hpp"
 #include "openai/models.hpp"
@@ -55,6 +59,8 @@ struct ClientOptions {
   std::size_t max_retries = 2;
   std::map<std::string, std::string> default_headers;
   std::map<std::string, std::string> default_query;
+  LogLevel log_level = LogLevel::Off;
+  LoggerCallback logger;
 };
 
 class OpenAIClient;
@@ -187,6 +193,8 @@ private:
                                const RequestOptions& options) const;
 
   HttpResponse perform_request(const PageRequestOptions& options) const;
+
+  void log(LogLevel level, const std::string& message, const nlohmann::json& details = {}) const;
 
   ClientOptions options_;
   std::unique_ptr<HttpClient> http_client_;

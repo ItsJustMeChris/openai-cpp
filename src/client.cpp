@@ -22,8 +22,10 @@
 #include <ctime>
 #include <string_view>
 #include <cstdlib>
+#include <set>
 #include <optional>
 
+#include "openai/logging.hpp"
 #include "openai/utils/base64.hpp"
 #include "openai/utils/platform.hpp"
 #include "openai/utils/uuid.hpp"
@@ -498,6 +500,43 @@ nlohmann::json extract_error_payload(const nlohmann::json& payload) {
   return payload;
 }
 
+std::map<std::string, std::string> sanitize_headers(const std::map<std::string, std::string>& headers) {
+  static const std::set<std::string> kSensitive = {"authorization", "cookie", "set-cookie"};
+  std::map<std::string, std::string> sanitized;
+  for (const auto& [key, value] : headers) {
+    std::string lowered; lowered.reserve(key.size());
+    std::transform(key.begin(), key.end(), std::back_inserter(lowered), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    if (kSensitive.count(lowered)) {
+      sanitized[key] = "***";
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
+nlohmann::json build_request_log_details(const HttpRequest& request, std::size_t retry_count) {
+  nlohmann::json details;
+  details["method"] = request.method;
+  details["url"] = request.url;
+  details["retry_count"] = static_cast<int>(retry_count);
+  details["headers"] = sanitize_headers(request.headers);
+  return details;
+}
+
+nlohmann::json build_response_log_details(const HttpRequest& request,
+                                          const HttpResponse& response,
+                                          std::chrono::steady_clock::duration duration,
+                                          std::size_t retry_count) {
+  nlohmann::json details = build_request_log_details(request, retry_count);
+  details["status"] = response.status_code;
+  details["duration_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+  details["response_headers"] = sanitize_headers(response.headers);
+  return details;
+}
+
 [[noreturn]] void throw_api_error(long status,
                                   const std::string& fallback_message,
                                   const nlohmann::json& error_payload,
@@ -559,6 +598,16 @@ OpenAIClient::OpenAIClient(ClientOptions options,
 Completion OpenAIClient::create_completion(const CompletionRequest& request,
                                            const RequestOptions& options) {
   return completions_.create(request, options);
+}
+
+void OpenAIClient::log(LogLevel level, const std::string& message, const nlohmann::json& details) const {
+  if (!options_.logger) {
+    return;
+  }
+  if (static_cast<int>(level) > static_cast<int>(options_.log_level)) {
+    return;
+  }
+  options_.logger(level, message, details);
 }
 
 HttpResponse OpenAIClient::perform_request(const std::string& method,
@@ -626,6 +675,8 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
   while (true) {
     const std::size_t retry_count = max_retries - retries_remaining;
     HttpRequest http_request = build_request(retry_count);
+    log(LogLevel::Debug, "sending request", build_request_log_details(http_request, retry_count));
+    auto start_time = std::chrono::steady_clock::now();
     HttpResponse response;
     try {
       response = http_client_->request(http_request);
@@ -633,6 +684,7 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
       if (retries_remaining == 0) {
         throw APIConnectionError(error.what());
       }
+      log(LogLevel::Warn, "request failed, retrying", build_request_log_details(http_request, retry_count));
       auto delay = compute_retry_delay(nullptr, retries_remaining, max_retries);
       sleep_for_duration(delay);
       --retries_remaining;
@@ -641,6 +693,7 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
       if (retries_remaining == 0) {
         throw APIConnectionError(error.what());
       }
+      log(LogLevel::Warn, "request failed, retrying", build_request_log_details(http_request, retry_count));
       auto delay = compute_retry_delay(nullptr, retries_remaining, max_retries);
       sleep_for_duration(delay);
       --retries_remaining;
@@ -648,11 +701,17 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
     }
 
     if (response.status_code < 400) {
+      auto duration = std::chrono::steady_clock::now() - start_time;
+      log(LogLevel::Info, "request succeeded", build_response_log_details(http_request, response, duration, retry_count));
       return response;
     }
 
     if (should_retry_response(response, retries_remaining)) {
       auto delay = compute_retry_delay(&response, retries_remaining, max_retries);
+      auto duration = std::chrono::steady_clock::now() - start_time;
+      auto details = build_response_log_details(http_request, response, duration, retry_count);
+      details["retry_delay_ms"] = delay.count();
+      log(LogLevel::Warn, "retrying request after error", details);
       sleep_for_duration(delay);
       --retries_remaining;
       continue;
@@ -667,6 +726,8 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
     } catch (const std::exception&) {
       // ignore parsing errors
     }
+    auto duration = std::chrono::steady_clock::now() - start_time;
+    log(LogLevel::Error, "request failed", build_response_log_details(http_request, response, duration, retry_count));
     throw_api_error(response.status_code, message, error_payload, response.headers);
   }
 
