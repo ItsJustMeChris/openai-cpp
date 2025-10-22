@@ -3,6 +3,7 @@
 #include "openai/client.hpp"
 #include "openai/error.hpp"
 #include "openai/pagination.hpp"
+#include "openai/utils/multipart.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -16,7 +17,6 @@ namespace {
 using json = nlohmann::json;
 
 constexpr const char* kFilesPath = "/files";
-constexpr const char* kMultipartBoundary = "----openai-cpp-boundary";
 
 std::string filename_from_path(const std::string& path) {
   auto pos = path.find_last_of("/\\");
@@ -32,25 +32,6 @@ std::vector<std::uint8_t> read_file_binary(const std::string& path) {
     throw OpenAIError("Failed to open file: " + path);
   }
   return std::vector<std::uint8_t>((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-}
-
-std::string build_multipart_body(const FileUploadRequest& request, const std::vector<std::uint8_t>& file_data) {
-  std::ostringstream body;
-  const std::string boundary = kMultipartBoundary;
-  const std::string filename = request.file_name.value_or(filename_from_path(request.file_path));
-  const std::string content_type = request.content_type.value_or("application/octet-stream");
-
-  body << "--" << boundary << "\r\n";
-  body << "Content-Disposition: form-data; name=\"purpose\"\r\n\r\n";
-  body << request.purpose << "\r\n";
-
-  body << "--" << boundary << "\r\n";
-  body << "Content-Disposition: form-data; name=\"file\"; filename=\"" << filename << "\"\r\n";
-  body << "Content-Type: " << content_type << "\r\n\r\n";
-  body.write(reinterpret_cast<const char*>(file_data.data()), static_cast<std::streamsize>(file_data.size()));
-  body << "\r\n--" << boundary << "--\r\n";
-
-  return body.str();
 }
 
 FileObject parse_file(const json& payload) {
@@ -186,12 +167,17 @@ FileDeleted FilesResource::remove(const std::string& file_id) const {
 
 FileObject FilesResource::create(const FileUploadRequest& request, const RequestOptions& options) const {
   auto file_data = read_file_binary(request.file_path);
-  auto body = build_multipart_body(request, file_data);
+  utils::MultipartFormData form;
+  form.append_text("purpose", request.purpose);
+  const std::string filename = request.file_name.value_or(filename_from_path(request.file_path));
+  const std::string content_type = request.content_type.value_or("application/octet-stream");
+  form.append_file("file", filename, content_type, file_data);
+  auto encoded = form.build();
 
   RequestOptions request_options = options;
-  request_options.headers["Content-Type"] = std::string("multipart/form-data; boundary=") + kMultipartBoundary;
+  request_options.headers["Content-Type"] = encoded.content_type;
 
-  auto response = client_.perform_request("POST", kFilesPath, body, request_options);
+  auto response = client_.perform_request("POST", kFilesPath, encoded.body, request_options);
   try {
     auto payload = json::parse(response.body);
     return parse_file(payload);
