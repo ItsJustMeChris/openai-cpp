@@ -2501,6 +2501,38 @@ ResponseStreamSnapshot ResponsesResource::create_stream_snapshot(const ResponseR
   return create_stream_snapshot(request, RequestOptions{});
 }
 
+ResponseStream ResponsesResource::stream(const ResponseRequest& request, const RequestOptions& options) const {
+  ResponseStreamSnapshot snapshot;
+  std::vector<ResponseStreamEvent> typed_events;
+
+  SSEEventStream sse_stream([&](const ServerSentEvent& sse_event) {
+    if (auto parsed = parse_response_stream_event(sse_event)) {
+      snapshot.ingest(*parsed);
+      typed_events.push_back(*parsed);
+    }
+    return true;
+  });
+
+  auto body = build_request_body(request);
+  body["stream"] = true;
+
+  RequestOptions request_options = options;
+  request_options.headers["Accept"] = "text/event-stream";
+  request_options.collect_body = false;
+  request_options.on_chunk = [&](const char* data, std::size_t size) { sse_stream.feed(data, size); };
+
+  client_.perform_request("POST", kResponseEndpoint, body.dump(), request_options);
+
+  sse_stream.finalize();
+
+  std::vector<ServerSentEvent> raw_events = sse_stream.events();
+  return ResponseStream(std::move(raw_events), std::move(typed_events), std::move(snapshot));
+}
+
+ResponseStream ResponsesResource::stream(const ResponseRequest& request) const {
+  return stream(request, RequestOptions{});
+}
+
 std::vector<ServerSentEvent> ResponsesResource::retrieve_stream(const std::string& response_id,
                                                                 const ResponseRetrieveOptions& retrieve_options,
                                                                 const RequestOptions& options) const {
@@ -2547,6 +2579,38 @@ ResponseStreamSnapshot ResponsesResource::retrieve_stream_snapshot(const std::st
 
 ResponseStreamSnapshot ResponsesResource::retrieve_stream_snapshot(const std::string& response_id) const {
   return retrieve_stream_snapshot(response_id, ResponseRetrieveOptions{.stream = true}, RequestOptions{});
+}
+
+ResponseStream ResponsesResource::stream(const std::string& response_id,
+                                         const ResponseRetrieveOptions& retrieve_options,
+                                         const RequestOptions& options) const {
+  ResponseStreamSnapshot snapshot;
+  std::vector<ResponseStreamEvent> typed_events;
+
+  SSEEventStream sse_stream([&](const ServerSentEvent& sse_event) {
+    if (auto parsed = parse_response_stream_event(sse_event)) {
+      snapshot.ingest(*parsed);
+      typed_events.push_back(*parsed);
+    }
+    return true;
+  });
+
+  RequestOptions request_options = options;
+  request_options.headers["Accept"] = "text/event-stream";
+  request_options.collect_body = false;
+  request_options.query_params["stream"] = retrieve_options.stream ? "true" : "false";
+  request_options.on_chunk = [&](const char* data, std::size_t size) { sse_stream.feed(data, size); };
+
+  client_.perform_request("GET", build_response_path(response_id), "", request_options);
+
+  sse_stream.finalize();
+
+  std::vector<ServerSentEvent> raw_events = sse_stream.events();
+  return ResponseStream(std::move(raw_events), std::move(typed_events), std::move(snapshot));
+}
+
+ResponseStream ResponsesResource::stream(const std::string& response_id) const {
+  return stream(response_id, ResponseRetrieveOptions{.stream = true}, RequestOptions{});
 }
 
 ResponseItemList ResponsesResource::InputItemsResource::list(const std::string& response_id) const {

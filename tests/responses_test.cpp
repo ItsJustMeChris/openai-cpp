@@ -518,6 +518,117 @@ data: [DONE]
   EXPECT_EQ(response.output[1].message->content[0].text->text, "The answer is 42");
 }
 
+TEST(ResponsesResourceTest, StreamCreateReturnsTypedEvents) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string body = R"(data: {"response":{"id":"resp_stream","object":"response","created_at":1,"model":"gpt-4o-mini","status":"in_progress","metadata":{},"parallel_tool_calls":false,"output":[],"usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}},"sequence_number":0,"type":"response.created"}
+
+data: {"item":{"id":"msg_1","type":"message","role":"assistant","status":"in_progress","content":[]},"output_index":0,"sequence_number":1,"type":"response.output_item.added"}
+
+data: {"content_index":0,"item_id":"msg_1","output_index":0,"part":{"type":"output_text","text":"","annotations":[]},"sequence_number":2,"type":"response.content_part.added"}
+
+data: {"content_index":0,"delta":"Hello ","item_id":"msg_1","logprobs":[],"output_index":0,"sequence_number":3,"type":"response.output_text.delta"}
+
+data: {"content_index":0,"delta":"world","item_id":"msg_1","logprobs":[],"output_index":0,"sequence_number":4,"type":"response.output_text.delta"}
+
+data: {"content_index":0,"item_id":"msg_1","logprobs":[],"output_index":0,"sequence_number":5,"text":"Hello world","type":"response.output_text.done"}
+
+data: {"item":{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"Hello world","annotations":[]}]},"output_index":0,"sequence_number":6,"type":"response.output_item.done"}
+
+data: {"response":{"id":"resp_stream","object":"response","created_at":1,"model":"gpt-4o-mini","status":"completed","metadata":{},"parallel_tool_calls":false,"output":[{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"Hello world","annotations":[]}]}],"output_text":"Hello world","usage":{"input_tokens":0,"output_tokens":2,"total_tokens":2}},"sequence_number":7,"type":"response.completed"}
+
+data: [DONE]
+
+)";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, body});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  ResponseRequest request;
+  request.model = "gpt-4o-mini";
+  ResponseInputItem input;
+  input.type = ResponseInputItem::Type::Message;
+  input.message.role = "user";
+  ResponseInputContent content;
+  content.type = ResponseInputContent::Type::Text;
+  content.text = "Say hello";
+  input.message.content.push_back(content);
+  request.input.push_back(std::move(input));
+
+  auto stream = client.responses().stream(request);
+
+  EXPECT_EQ(stream.raw_events().size(), 9u);
+  ASSERT_EQ(stream.events().size(), 8u);
+  EXPECT_EQ(stream.events().front().type, ResponseStreamEvent::Type::Created);
+  EXPECT_EQ(stream.events().back().type, ResponseStreamEvent::Type::Completed);
+  ASSERT_TRUE(stream.has_final_response());
+  ASSERT_TRUE(stream.final_response().has_value());
+  EXPECT_EQ(stream.final_response()->output_text, "Hello world");
+}
+
+TEST(ResponsesResourceTest, StreamRetrieveReturnsTypedEvents) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string body = R"(data: {"response":{"id":"resp_reason","object":"response","created_at":10,"model":"o3","status":"in_progress","metadata":{},"parallel_tool_calls":false,"output":[],"usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}},"sequence_number":0,"type":"response.created"}
+
+data: {"item":{"id":"r1","type":"reasoning","status":"in_progress","summary":[],"content":[]},"output_index":0,"sequence_number":1,"type":"response.output_item.added"}
+
+data: {"content_index":0,"item_id":"r1","output_index":0,"part":{"type":"reasoning_text","text":""},"sequence_number":2,"type":"response.content_part.added"}
+
+data: {"content_index":0,"delta":"Chain: Step 1. ","item_id":"r1","output_index":0,"sequence_number":3,"type":"response.reasoning_text.delta"}
+
+data: {"content_index":0,"delta":"Step 2.","item_id":"r1","output_index":0,"sequence_number":4,"type":"response.reasoning_text.delta"}
+
+data: {"item":{"id":"msg_2","type":"message","role":"assistant","status":"in_progress","content":[]},"output_index":1,"sequence_number":5,"type":"response.output_item.added"}
+
+data: {"content_index":0,"item_id":"msg_2","output_index":1,"part":{"type":"output_text","text":"","annotations":[]},"sequence_number":6,"type":"response.content_part.added"}
+
+data: {"content_index":0,"delta":"The answer is ","item_id":"msg_2","logprobs":[],"output_index":1,"sequence_number":7,"type":"response.output_text.delta"}
+
+data: {"content_index":0,"delta":"42","item_id":"msg_2","logprobs":[],"output_index":1,"sequence_number":8,"type":"response.output_text.delta"}
+
+data: {"content_index":0,"item_id":"msg_2","logprobs":[],"output_index":1,"sequence_number":9,"text":"The answer is 42","type":"response.output_text.done"}
+
+data: {"response":{"id":"resp_reason","object":"response","created_at":10,"model":"o3","status":"completed","metadata":{},"parallel_tool_calls":false,"output":[{"id":"r1","type":"reasoning","status":"completed","summary":[],"content":[{"type":"reasoning_text","text":"Chain: Step 1. Step 2."}]},{"id":"msg_2","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"The answer is 42","annotations":[]}]}],"output_text":"The answer is 42","usage":{"input_tokens":0,"output_tokens":6,"total_tokens":6}},"sequence_number":10,"type":"response.completed"}
+
+data: [DONE]
+
+)";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, body});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  ResponseRetrieveOptions retrieve_options;
+  retrieve_options.stream = true;
+
+  auto stream = client.responses().stream("resp_reason", retrieve_options, RequestOptions{});
+
+  EXPECT_EQ(stream.raw_events().size(), 12u);
+  ASSERT_EQ(stream.events().size(), 11u);
+  EXPECT_EQ(stream.events().front().type, ResponseStreamEvent::Type::Created);
+  EXPECT_EQ(stream.events().back().type, ResponseStreamEvent::Type::Completed);
+  ASSERT_TRUE(stream.has_final_response());
+  ASSERT_TRUE(stream.final_response().has_value());
+  EXPECT_EQ(stream.final_response()->output_text, "The answer is 42");
+  ASSERT_FALSE(stream.final_response()->output.empty());
+  ASSERT_TRUE(stream.final_response()->output[0].reasoning.has_value());
+  EXPECT_EQ(stream.final_response()->output[0].reasoning->content[0].text, "Chain: Step 1. Step 2.");
+}
+
 TEST(ResponsesResourceTest, ListParsesResponsesArray) {
   using namespace openai;
 

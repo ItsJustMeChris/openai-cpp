@@ -25,7 +25,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 ## Client Facade
 - [x] `client.completions().create`
 - [ ] Other core resource registration (lazy instantiation, type-safe surfaces)
-- [ ] Streaming return types (`APIPromise`, `Stream` equivalents)
+- [x] Streaming return types (`APIPromise`, `Stream` equivalents)
 - [x] Upload helpers and binary response support
 
 ## REST Resources

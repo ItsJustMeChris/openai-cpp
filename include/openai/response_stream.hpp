@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "openai/responses.hpp"
+#include "openai/streaming.hpp"
 
 namespace openai {
 
@@ -45,5 +46,24 @@ private:
   std::unordered_map<std::string, std::size_t> item_index_by_id_;
 };
 
-}  // namespace openai
+class ResponseStream {
+public:
+  ResponseStream() = default;
+  ResponseStream(std::vector<ServerSentEvent> raw_events,
+                 std::vector<ResponseStreamEvent> typed_events,
+                 ResponseStreamSnapshot snapshot);
 
+  const std::vector<ServerSentEvent>& raw_events() const { return raw_events_; }
+  const std::vector<ResponseStreamEvent>& events() const { return typed_events_; }
+  const ResponseStreamSnapshot& snapshot() const { return snapshot_; }
+
+  const std::optional<Response>& final_response() const { return snapshot_.final_response(); }
+  bool has_final_response() const { return snapshot_.has_final_response(); }
+
+private:
+  std::vector<ServerSentEvent> raw_events_;
+  std::vector<ResponseStreamEvent> typed_events_;
+  ResponseStreamSnapshot snapshot_;
+};
+
+}  // namespace openai

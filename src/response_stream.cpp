@@ -48,6 +48,11 @@ std::string extract_item_id(const ResponseOutputItem& item) {
 
 }  // namespace
 
+ResponseStream::ResponseStream(std::vector<ServerSentEvent> raw_events,
+                               std::vector<ResponseStreamEvent> typed_events,
+                               ResponseStreamSnapshot snapshot)
+    : raw_events_(std::move(raw_events)), typed_events_(std::move(typed_events)), snapshot_(std::move(snapshot)) {}
+
 void ResponseStreamSnapshot::ingest(const ResponseStreamEvent& event) {
   events_.push_back(event);
   switch (event.type) {
@@ -349,4 +354,3 @@ void ResponseStreamSnapshot::handle_function_arguments_done(const ResponseFuncti
 }
 
 }  // namespace openai
-
