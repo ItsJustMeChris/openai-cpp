@@ -13,6 +13,15 @@
 #include <sstream>
 #include <iomanip>
 #include <cctype>
+#include <thread>
+#include <random>
+#include <array>
+#include <algorithm>
+#include <locale>
+#include <cmath>
+#include <ctime>
+#include <string_view>
+#include <cstdlib>
 
 #include "openai/utils/base64.hpp"
 #include "openai/utils/platform.hpp"
@@ -21,6 +30,190 @@ namespace openai {
 namespace {
 
 using json = nlohmann::json;
+
+constexpr double kInitialRetryDelaySeconds = 0.5;
+constexpr double kMaxRetryDelaySeconds = 8.0;
+constexpr std::chrono::milliseconds kMaxRetryAfter = std::chrono::milliseconds(60'000);
+
+bool iequals(std::string_view lhs, std::string_view rhs) {
+  return lhs.size() == rhs.size() &&
+         std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), [](char a, char b) {
+           return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+         });
+}
+
+std::optional<std::string> get_header_value(const std::map<std::string, std::string>& headers,
+                                            std::string_view key) {
+  for (const auto& [name, value] : headers) {
+    if (iequals(name, key)) {
+      return value;
+    }
+  }
+  return std::nullopt;
+}
+
+double random_jitter_factor() {
+  thread_local std::mt19937 rng(std::random_device{}());
+  std::uniform_real_distribution<double> dist(0.0, 0.25);
+  return 1.0 - dist(rng);
+}
+
+std::chrono::milliseconds calculate_default_retry_delay(std::size_t retries_remaining,
+                                                        std::size_t max_retries) {
+  if (max_retries == 0) {
+    return std::chrono::milliseconds(static_cast<int>(kInitialRetryDelaySeconds * 1000));
+  }
+  std::size_t num_retries = max_retries - retries_remaining;
+  double sleep_seconds =
+      std::min(kInitialRetryDelaySeconds * std::pow(2.0, static_cast<double>(num_retries)),
+               kMaxRetryDelaySeconds);
+  sleep_seconds *= random_jitter_factor();
+  if (sleep_seconds < 0.0) {
+    sleep_seconds = 0.0;
+  }
+  return std::chrono::milliseconds(static_cast<long>(sleep_seconds * 1000.0));
+}
+
+std::optional<std::chrono::milliseconds> parse_numeric_retry_after_ms(const std::string& value) {
+  char* end = nullptr;
+  double parsed = std::strtod(value.c_str(), &end);
+  if (end != value.c_str() && !std::isnan(parsed)) {
+    if (parsed < 0) {
+      return std::chrono::milliseconds(0);
+    }
+    return std::chrono::milliseconds(static_cast<long>(parsed));
+  }
+  return std::nullopt;
+}
+
+std::optional<std::chrono::milliseconds> parse_retry_after_seconds(const std::string& value) {
+  char* end = nullptr;
+  double parsed = std::strtod(value.c_str(), &end);
+  if (end != value.c_str() && !std::isnan(parsed)) {
+    if (parsed < 0) {
+      return std::chrono::milliseconds(0);
+    }
+    return std::chrono::milliseconds(static_cast<long>(parsed * 1000.0));
+  }
+  return std::nullopt;
+}
+
+std::optional<std::chrono::milliseconds> parse_retry_after_http_date(const std::string& value) {
+  std::tm tm{};
+  std::istringstream stream(value);
+  stream.imbue(std::locale::classic());
+  stream >> std::get_time(&tm, "%a, %d %b %Y %H:%M:%S GMT");
+  if (stream.fail()) {
+    return std::nullopt;
+  }
+#if defined(_WIN32)
+  std::time_t utc_time = _mkgmtime(&tm);
+#else
+  std::time_t utc_time = timegm(&tm);
+#endif
+  if (utc_time == static_cast<std::time_t>(-1)) {
+    return std::nullopt;
+  }
+  auto now = std::chrono::system_clock::now();
+  auto now_time = std::chrono::system_clock::to_time_t(now);
+  auto delta = std::difftime(utc_time, now_time);
+  if (delta <= 0) {
+    return std::chrono::milliseconds(0);
+  }
+  return std::chrono::milliseconds(static_cast<long>(delta * 1000.0));
+}
+
+std::optional<std::chrono::milliseconds> parse_retry_after(const std::map<std::string, std::string>& headers) {
+  if (auto retry_after_ms = get_header_value(headers, "retry-after-ms")) {
+    if (auto parsed = parse_numeric_retry_after_ms(*retry_after_ms)) {
+      return parsed;
+    }
+  }
+  if (auto retry_after = get_header_value(headers, "retry-after")) {
+    if (auto parsed_seconds = parse_retry_after_seconds(*retry_after)) {
+      return parsed_seconds;
+    }
+    if (auto parsed_date = parse_retry_after_http_date(*retry_after)) {
+      return parsed_date;
+    }
+  }
+  return std::nullopt;
+}
+
+bool should_retry_status(long status) {
+  if (status == 408 || status == 409 || status == 429) {
+    return true;
+  }
+  return status >= 500;
+}
+
+bool should_retry_response(const HttpResponse& response, std::size_t retries_remaining) {
+  if (retries_remaining == 0) {
+    return false;
+  }
+  if (auto explicit_retry = get_header_value(response.headers, "x-should-retry")) {
+    std::string lowered;
+    lowered.reserve(explicit_retry->size());
+    for (char ch : *explicit_retry) {
+      lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (lowered == "true") {
+      return true;
+    }
+    if (lowered == "false") {
+      return false;
+    }
+  }
+  return should_retry_status(response.status_code);
+}
+
+std::chrono::milliseconds compute_retry_delay(const HttpResponse* response,
+                                              std::size_t retries_remaining,
+                                              std::size_t max_retries) {
+  if (response) {
+    if (auto header_delay = parse_retry_after(response->headers)) {
+      if (header_delay->count() >= 0 && *header_delay < kMaxRetryAfter) {
+        return *header_delay;
+      }
+    }
+  }
+  auto delay = calculate_default_retry_delay(retries_remaining, max_retries);
+  if (delay < std::chrono::milliseconds(0)) {
+    return std::chrono::milliseconds(0);
+  }
+  if (delay > kMaxRetryAfter) {
+    return kMaxRetryAfter;
+  }
+  return delay;
+}
+
+std::string generate_uuid4() {
+  std::array<unsigned char, 16> data{};
+  std::random_device rd;
+  std::mt19937 rng(rd());
+  std::uniform_int_distribution<int> dist(0, 255);
+  for (auto& byte : data) {
+    byte = static_cast<unsigned char>(dist(rng));
+  }
+  data[6] = (data[6] & 0x0F) | 0x40;
+  data[8] = (data[8] & 0x3F) | 0x80;
+
+  std::ostringstream oss;
+  oss << std::hex << std::setfill('0');
+  for (std::size_t i = 0; i < data.size(); ++i) {
+    oss << std::setw(2) << static_cast<int>(data[i]);
+    if (i == 3 || i == 5 || i == 7 || i == 9) {
+      oss << '-';
+    }
+  }
+  return oss.str();
+}
+
+void sleep_for_duration(std::chrono::milliseconds duration) {
+  if (duration.count() > 0) {
+    std::this_thread::sleep_for(duration);
+  }
+}
 
 json completion_request_to_json(const CompletionRequest& request) {
   json body;
@@ -326,45 +519,84 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
                                            const std::string& path,
                                            const std::string& body,
                                            const RequestOptions& options) const {
-  HttpRequest http_request;
-  http_request.method = method;
-  std::string url = build_url(options_.base_url, path);
-  url = append_query_params(url, options.query_params);
-  http_request.url = std::move(url);
-  http_request.body = body;
-  http_request.timeout = options.timeout.value_or(options_.timeout);
-
-  http_request.headers.clear();
-  http_request.on_chunk = options.on_chunk;
-  http_request.collect_body = options.collect_body;
-  // The API expects JSON by default.
-  if (!body.empty()) {
-    http_request.headers["Content-Type"] = "application/json";
-  }
-  http_request.headers["Accept"] = "application/json";
-  http_request.headers["User-Agent"] = utils::user_agent();
-  for (const auto& [key, value] : utils::platform_headers()) {
-    http_request.headers[key] = value;
-  }
-  http_request.headers["Authorization"] = std::string("Bearer ") + options_.api_key;
-
-  if (options_.organization) {
-    http_request.headers["OpenAI-Organization"] = *options_.organization;
-  }
-  if (options_.project) {
-    http_request.headers["OpenAI-Project"] = *options_.project;
-  }
-  if (options.idempotency_key) {
-    http_request.headers["Idempotency-Key"] = *options.idempotency_key;
+  const std::size_t max_retries = options.max_retries.value_or(options_.max_retries);
+  std::size_t retries_remaining = max_retries;
+  std::optional<std::string> idempotency_key = options.idempotency_key;
+  if (!idempotency_key && !iequals(method, "GET")) {
+    idempotency_key = generate_uuid4();
   }
 
-  for (const auto& [key, value] : options.headers) {
-    http_request.headers[key] = value;
-  }
+  auto build_request = [&](std::size_t retry_count) {
+    HttpRequest http_request;
+    http_request.method = method;
+    std::string url = build_url(options_.base_url, path);
+    url = append_query_params(url, options.query_params);
+    http_request.url = std::move(url);
+    http_request.body = body;
+    http_request.timeout = options.timeout.value_or(options_.timeout);
+    http_request.on_chunk = options.on_chunk;
+    http_request.collect_body = options.collect_body;
 
-  auto response = http_client_->request(http_request);
+    http_request.headers.clear();
+    // The API expects JSON by default.
+    if (!body.empty()) {
+      http_request.headers["Content-Type"] = "application/json";
+    }
+    http_request.headers["Accept"] = "application/json";
+    http_request.headers["User-Agent"] = utils::user_agent();
+    http_request.headers["X-Stainless-Retry-Count"] = std::to_string(retry_count);
+    auto timeout_seconds = std::chrono::duration_cast<std::chrono::seconds>(http_request.timeout).count();
+    if (timeout_seconds > 0) {
+      http_request.headers["X-Stainless-Timeout"] = std::to_string(timeout_seconds);
+    }
+    for (const auto& [key, value] : utils::platform_headers()) {
+      http_request.headers[key] = value;
+    }
+    http_request.headers["Authorization"] = std::string("Bearer ") + options_.api_key;
 
-  if (response.status_code >= 400) {
+    if (options_.organization) {
+      http_request.headers["OpenAI-Organization"] = *options_.organization;
+    }
+    if (options_.project) {
+      http_request.headers["OpenAI-Project"] = *options_.project;
+    }
+    if (idempotency_key) {
+      http_request.headers["Idempotency-Key"] = *idempotency_key;
+    }
+
+    for (const auto& [key, value] : options.headers) {
+      http_request.headers[key] = value;
+    }
+    return http_request;
+  };
+
+  while (true) {
+    const std::size_t retry_count = max_retries - retries_remaining;
+    HttpRequest http_request = build_request(retry_count);
+    HttpResponse response;
+    try {
+      response = http_client_->request(http_request);
+    } catch (const OpenAIError& error) {
+      if (retries_remaining == 0) {
+        throw;
+      }
+      auto delay = compute_retry_delay(nullptr, retries_remaining, max_retries);
+      sleep_for_duration(delay);
+      --retries_remaining;
+      continue;
+    }
+
+    if (response.status_code < 400) {
+      return response;
+    }
+
+    if (should_retry_response(response, retries_remaining)) {
+      auto delay = compute_retry_delay(&response, retries_remaining, max_retries);
+      sleep_for_duration(delay);
+      --retries_remaining;
+      continue;
+    }
+
     std::string message;
     try {
       auto payload = json::parse(response.body);
@@ -378,7 +610,7 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
     throw HttpError(response.status_code, message);
   }
 
-  return response;
+  throw OpenAIError("Retry loop exited unexpectedly");
 }
 
 HttpResponse OpenAIClient::perform_request(const PageRequestOptions& options) const {

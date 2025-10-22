@@ -5,7 +5,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 ## Core Infrastructure
 - [x] Configuration object (`ClientOptions`) with auth headers and base URL
 - [x] HTTP transport abstraction (`HttpClient`) with default libcurl backend
-- [ ] Retry and backoff policy parity (`maxRetries`, retry-after handling)
+- [x] Retry and backoff policy parity (`maxRetries`, retry-after handling)
 - [ ] Request option merging (`RequestOptions`, idempotency, query parameters) – headers/query support implemented
 - [x] Platform detection + header helpers (User-Agent parity)
 - [ ] Streaming helpers (Server-Sent Events, chunk decoding)

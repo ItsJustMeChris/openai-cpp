@@ -1,9 +1,11 @@
 #pragma once
 
 #include <chrono>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
+#include <cstddef>
 #include <string>
 
 #include "openai/completions.hpp"
@@ -31,6 +33,7 @@ struct RequestOptions {
   std::map<std::string, std::string> query_params;
   std::optional<std::string> idempotency_key;
   std::optional<std::chrono::milliseconds> timeout;
+  std::optional<std::size_t> max_retries;
   std::function<void(const char*, std::size_t)> on_chunk;
   bool collect_body = true;
 };

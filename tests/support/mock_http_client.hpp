@@ -25,6 +25,7 @@ public:
 
   HttpResponse request(const HttpRequest& request) override {
     std::lock_guard<std::mutex> lock(mutex_);
+    ++call_count_;
     last_request_ = request;
     if (responses_.empty()) {
       throw OpenAIError("MockHttpClient queue underflow");
@@ -64,11 +65,18 @@ public:
     std::lock_guard<std::mutex> lock(mutex_);
     responses_ = {};
     last_request_.reset();
+    call_count_ = 0;
+  }
+
+  [[nodiscard]] std::size_t call_count() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return call_count_;
   }
 
 private:
   std::queue<Enqueued> responses_;
   std::optional<HttpRequest> last_request_;
+  std::size_t call_count_ = 0;
   mutable std::mutex mutex_;
 };
 
