@@ -11,7 +11,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Streaming helpers (Server-Sent Events, chunk decoding)
 - [x] Pagination abstractions (`AbstractPage`, cursor/page responses)
 - [ ] Multipart uploads (`Uploads` helper, file chunking strategies)
-- [ ] Error hierarchy mirroring `core/error.ts`
+- [x] Error hierarchy mirroring `core/error.ts`
 - [ ] Logging hooks and middleware support
 
 ## Internal Utilities

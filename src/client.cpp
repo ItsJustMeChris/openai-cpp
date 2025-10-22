@@ -488,6 +488,48 @@ std::string extract_error_message(const json& payload) {
   return {};
 }
 
+nlohmann::json extract_error_payload(const nlohmann::json& payload) {
+  if (payload.contains("error")) {
+    const auto& err = payload.at("error");
+    if (err.is_object()) {
+      return err;
+    }
+  }
+  return payload;
+}
+
+[[noreturn]] void throw_api_error(long status,
+                                  const std::string& fallback_message,
+                                  const nlohmann::json& error_payload,
+                                  const std::map<std::string, std::string>& headers) {
+  const std::string message = fallback_message.empty() ? ("HTTP " + std::to_string(status) + " error") : fallback_message;
+  const nlohmann::json& body = error_payload;
+
+  switch (status) {
+    case 400:
+      throw BadRequestError(message, status, body, headers);
+    case 401:
+      throw AuthenticationError(message, status, body, headers);
+    case 403:
+      throw PermissionDeniedError(message, status, body, headers);
+    case 404:
+      throw NotFoundError(message, status, body, headers);
+    case 409:
+      throw ConflictError(message, status, body, headers);
+    case 422:
+      throw UnprocessableEntityError(message, status, body, headers);
+    case 429:
+      throw RateLimitError(message, status, body, headers);
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      throw InternalServerError(message, status, body, headers);
+    default:
+      throw APIError(message, status, body, headers);
+  }
+}
+
 }  // namespace
 
 OpenAIClient::OpenAIClient(ClientOptions options,
@@ -589,7 +631,15 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
       response = http_client_->request(http_request);
     } catch (const OpenAIError& error) {
       if (retries_remaining == 0) {
-        throw;
+        throw APIConnectionError(error.what());
+      }
+      auto delay = compute_retry_delay(nullptr, retries_remaining, max_retries);
+      sleep_for_duration(delay);
+      --retries_remaining;
+      continue;
+    } catch (const std::exception& error) {
+      if (retries_remaining == 0) {
+        throw APIConnectionError(error.what());
       }
       auto delay = compute_retry_delay(nullptr, retries_remaining, max_retries);
       sleep_for_duration(delay);
@@ -608,17 +658,16 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
       continue;
     }
 
+    nlohmann::json error_payload = nlohmann::json::object();
     std::string message;
     try {
       auto payload = json::parse(response.body);
       message = extract_error_message(payload);
+      error_payload = extract_error_payload(payload);
     } catch (const std::exception&) {
-      // Ignore parsing errors.
+      // ignore parsing errors
     }
-    if (message.empty()) {
-      message = "HTTP " + std::to_string(response.status_code) + " error";
-    }
-    throw HttpError(response.status_code, message);
+    throw_api_error(response.status_code, message, error_payload, response.headers);
   }
 
   throw OpenAIError("Retry loop exited unexpectedly");

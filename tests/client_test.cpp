@@ -9,8 +9,10 @@
 using openai::ClientOptions;
 using openai::HttpResponse;
 using openai::OpenAIClient;
-using openai::HttpError;
 using openai::RequestOptions;
+using openai::AuthenticationError;
+using openai::BadRequestError;
+using openai::InternalServerError;
 namespace mock = openai::testing;
 namespace utils = openai::utils;
 
@@ -102,7 +104,13 @@ TEST(OpenAIClientRetryTest, DoesNotRetryOnClientError) {
 
   OpenAIClient client(std::move(options), std::move(http_mock));
 
-  EXPECT_THROW(client.models().list(), HttpError);
+  try {
+    client.models().list();
+    FAIL() << "Expected BadRequestError";
+  } catch (const BadRequestError& err) {
+    EXPECT_EQ(err.status_code(), 400);
+    EXPECT_EQ(std::string(err.what()), "bad request");
+  }
   EXPECT_EQ(mock_ptr->call_count(), 1);
 }
 
@@ -130,7 +138,12 @@ TEST(OpenAIClientRetryTest, PerRequestMaxRetriesOverridesClientDefault) {
   RequestOptions request_options;
   request_options.max_retries = 0;
 
-  EXPECT_THROW(client.models().list(request_options), HttpError);
+  try {
+    client.models().list(request_options);
+    FAIL() << "Expected InternalServerError";
+  } catch (const InternalServerError& err) {
+    EXPECT_EQ(err.status_code(), 500);
+  }
   EXPECT_EQ(mock_ptr->call_count(), 1);
 }
 
@@ -232,3 +245,29 @@ TEST(OpenAIClientRequestOptionsTest, RequestOptionsCanRemoveDefaultQueryParamete
   EXPECT_EQ(captured->url.find("foo=bar"), std::string::npos);
   EXPECT_NE(captured->url.find("baz=buzz"), std::string::npos);
 }
+
+TEST(OpenAIClientErrorTest, MapsStatusCodesToSpecificErrors) {
+  auto http_mock = std::make_unique<mock::MockHttpClient>();
+  auto* mock_ptr = http_mock.get();
+
+  HttpResponse first;
+  first.status_code = 401;
+  first.body = R"({"error":{"message":"no auth"}})";
+  mock_ptr->enqueue_response(first);
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+  options.max_retries = 0;
+
+  OpenAIClient client(std::move(options), std::move(http_mock));
+
+  try {
+    client.models().list();
+    FAIL() << "Expected AuthenticationError";
+  } catch (const AuthenticationError& err) {
+    EXPECT_EQ(err.status_code(), 401);
+    EXPECT_EQ(std::string(err.what()), "no auth");
+  }
+}
+
+// Additional error mappings are exercised through status-specific tests above.
