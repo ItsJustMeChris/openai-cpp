@@ -22,6 +22,7 @@
 #include <ctime>
 #include <string_view>
 #include <cstdlib>
+#include <optional>
 
 #include "openai/utils/base64.hpp"
 #include "openai/utils/platform.hpp"
@@ -358,6 +359,30 @@ std::string append_query_params(const std::string& url,
   return result;
 }
 
+std::map<std::string, std::string> merge_optional_entries(
+    std::map<std::string, std::string> base,
+    const std::map<std::string, std::optional<std::string>>& overrides) {
+  for (const auto& [key, value] : overrides) {
+    if (value.has_value()) {
+      base[key] = *value;
+    } else {
+      base.erase(key);
+    }
+  }
+  return base;
+}
+
+void apply_optional_entries(std::map<std::string, std::string>& target,
+                            const std::map<std::string, std::optional<std::string>>& overrides) {
+  for (const auto& [key, value] : overrides) {
+    if (value.has_value()) {
+      target[key] = *value;
+    } else {
+      target.erase(key);
+    }
+  }
+}
+
 std::vector<float> bytes_to_float32(const std::vector<std::uint8_t>& bytes) {
   if (bytes.size() % 4 != 0) {
     throw OpenAIError("Embedding bytes length must be a multiple of 4");
@@ -530,43 +555,50 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
     HttpRequest http_request;
     http_request.method = method;
     std::string url = build_url(options_.base_url, path);
-    url = append_query_params(url, options.query_params);
+    auto merged_query = merge_optional_entries(options_.default_query, options.query_params);
+    url = append_query_params(url, merged_query);
     http_request.url = std::move(url);
     http_request.body = body;
     http_request.timeout = options.timeout.value_or(options_.timeout);
     http_request.on_chunk = options.on_chunk;
     http_request.collect_body = options.collect_body;
 
-    http_request.headers.clear();
-    // The API expects JSON by default.
-    if (!body.empty()) {
-      http_request.headers["Content-Type"] = "application/json";
+    std::map<std::string, std::string> headers;
+
+    if (idempotency_key) {
+      headers["Idempotency-Key"] = *idempotency_key;
     }
-    http_request.headers["Accept"] = "application/json";
-    http_request.headers["User-Agent"] = utils::user_agent();
-    http_request.headers["X-Stainless-Retry-Count"] = std::to_string(retry_count);
+
+    headers["Accept"] = "application/json";
+    headers["User-Agent"] = utils::user_agent();
+    headers["X-Stainless-Retry-Count"] = std::to_string(retry_count);
     auto timeout_seconds = std::chrono::duration_cast<std::chrono::seconds>(http_request.timeout).count();
     if (timeout_seconds > 0) {
-      http_request.headers["X-Stainless-Timeout"] = std::to_string(timeout_seconds);
+      headers["X-Stainless-Timeout"] = std::to_string(timeout_seconds);
     }
     for (const auto& [key, value] : utils::platform_headers()) {
-      http_request.headers[key] = value;
+      headers[key] = value;
     }
-    http_request.headers["Authorization"] = std::string("Bearer ") + options_.api_key;
+    headers["Authorization"] = std::string("Bearer ") + options_.api_key;
 
     if (options_.organization) {
-      http_request.headers["OpenAI-Organization"] = *options_.organization;
+      headers["OpenAI-Organization"] = *options_.organization;
     }
     if (options_.project) {
-      http_request.headers["OpenAI-Project"] = *options_.project;
-    }
-    if (idempotency_key) {
-      http_request.headers["Idempotency-Key"] = *idempotency_key;
+      headers["OpenAI-Project"] = *options_.project;
     }
 
-    for (const auto& [key, value] : options.headers) {
-      http_request.headers[key] = value;
+    for (const auto& [key, value] : options_.default_headers) {
+      headers[key] = value;
     }
+
+    // The API expects JSON by default.
+    if (!body.empty()) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    apply_optional_entries(headers, options.headers);
+    http_request.headers = std::move(headers);
     return http_request;
   };
 
@@ -615,8 +647,12 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
 
 HttpResponse OpenAIClient::perform_request(const PageRequestOptions& options) const {
   RequestOptions request_options;
-  request_options.headers = options.headers;
-  request_options.query_params = options.query;
+  for (const auto& [key, value] : options.headers) {
+    request_options.headers[key] = value;
+  }
+  for (const auto& [key, value] : options.query) {
+    request_options.query_params[key] = value;
+  }
   return perform_request(options.method, options.path, options.body, request_options);
 }
 

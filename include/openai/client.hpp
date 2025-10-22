@@ -29,8 +29,8 @@
 namespace openai {
 
 struct RequestOptions {
-  std::map<std::string, std::string> headers;
-  std::map<std::string, std::string> query_params;
+  std::map<std::string, std::optional<std::string>> headers;
+  std::map<std::string, std::optional<std::string>> query_params;
   std::optional<std::string> idempotency_key;
   std::optional<std::chrono::milliseconds> timeout;
   std::optional<std::size_t> max_retries;
@@ -53,6 +53,8 @@ struct ClientOptions {
   std::string base_url = "https://api.openai.com/v1";
   std::chrono::milliseconds timeout{60000};
   std::size_t max_retries = 2;
+  std::map<std::string, std::string> default_headers;
+  std::map<std::string, std::string> default_query;
 };
 
 class OpenAIClient;
