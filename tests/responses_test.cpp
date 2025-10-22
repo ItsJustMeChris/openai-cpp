@@ -23,12 +23,154 @@ TEST(ResponsesResourceTest, ParsesOutputTextAndUsage) {
       "model": "gpt-4o-mini",
       "output": [
         {
+          "id": "msg_123",
           "type": "message",
           "role": "assistant",
+          "status": "completed",
           "content": [
-            { "type": "output_text", "text": "Hello" },
-            { "type": "output_text", "text": ", world!" }
+            {
+              "type": "output_text",
+              "text": "Hello",
+              "annotations": [
+                {
+                  "type": "url_citation",
+                  "start_index": 0,
+                  "end_index": 5,
+                  "title": "Example",
+                  "url": "https://example.com"
+                }
+              ]
+            },
+            { "type": "refusal", "refusal": "Sorry" },
+            {
+              "type": "output_text",
+              "text": ", world!",
+              "logprobs": [
+                {
+                  "token": "world",
+                  "bytes": [119, 111, 114, 108, 100],
+                  "logprob": -0.02,
+                  "top_logprobs": [
+                    { "token": "world", "bytes": [119, 111, 114, 108, 100], "logprob": -0.02 }
+                  ]
+                }
+              ]
+            }
           ]
+        },
+        {
+          "type": "custom_tool_call",
+          "id": "tool_item",
+          "schema": {"name": "custom"}
+        },
+        {
+          "type": "function_call",
+          "id": "func_call_1",
+          "call_id": "func",
+          "name": "weather",
+          "arguments": "{\"location\":\"SF\"}"
+        },
+        {
+          "type": "function_call_output",
+          "id": "func_output_1",
+          "call_id": "func",
+          "output": "{\"temp\":70}",
+          "status": "completed"
+        },
+        {
+          "type": "computer_call",
+          "id": "comp_1",
+          "call_id": "cmp_call",
+          "status": "in_progress",
+          "action": {
+            "type": "scroll",
+            "scroll_x": 0,
+            "scroll_y": 200,
+            "x": 42,
+            "y": 84
+          },
+          "pending_safety_checks": [
+            { "id": "psc_1", "code": "human_review", "message": "Requires confirmation" }
+          ]
+        },
+        {
+          "type": "computer_call_output",
+          "id": "comp_out_1",
+          "call_id": "cmp_call",
+          "output": {
+            "type": "computer_screenshot",
+            "image_url": "https://example.com/screenshot.png"
+          },
+          "acknowledged_safety_checks": [
+            { "id": "psc_1", "code": "human_review", "message": "Requires confirmation" }
+          ],
+          "status": "completed"
+        },
+        {
+          "type": "web_search_call",
+          "id": "ws_1",
+          "status": "completed",
+          "action": {
+            "type": "search",
+            "query": "weather tomorrow",
+            "sources": [ { "type": "url", "url": "https://example.com/weather" } ]
+          }
+        },
+        {
+          "type": "local_shell_call",
+          "id": "shell_1",
+          "call_id": "shell_call",
+          "status": "completed",
+          "action": {
+            "type": "exec",
+            "command": ["ls", "-la"],
+            "env": { "PATH": "/bin" },
+            "timeout_ms": 1000,
+            "user": "root",
+            "working_directory": "/tmp"
+          }
+        },
+        {
+          "type": "local_shell_call_output",
+          "id": "shell_out_1",
+          "output": "{\"stdout\":\"ok\"}",
+          "status": "completed"
+        },
+        {
+          "type": "mcp_list_tools",
+          "id": "mcp_list",
+          "server_label": "deepwiki",
+          "tools": [
+            {
+              "name": "lookup",
+              "input_schema": {"type": "object"},
+              "annotations": {"tags": ["docs", "search"]}
+            }
+          ],
+          "next_page_token": "token-2"
+        },
+        {
+          "type": "mcp_call",
+          "id": "mcp_call_1",
+          "name": "lookup",
+          "server_label": "deepwiki",
+          "arguments": "{}",
+          "status": "completed",
+          "output": "result"
+        },
+        {
+          "type": "mcp_approval_request",
+          "id": "approval_1",
+          "arguments": "{}",
+          "server_label": "deepwiki",
+          "name": "lookup",
+          "suggested_decision": "approved"
+        },
+        {
+          "type": "mcp_approval_response",
+          "id": "approval_1",
+          "decision": "approved",
+          "reason": "ok"
         }
       ],
       "usage": {
@@ -48,9 +190,13 @@ TEST(ResponsesResourceTest, ParsesOutputTextAndUsage) {
 
   ResponseRequest request;
   request.model = "gpt-4o-mini";
-  ResponseInput input;
-  input.role = "user";
-  input.content.push_back(ResponseInputContent{.text = "Say hello"});
+  ResponseInputItem input;
+  input.type = ResponseInputItem::Type::Message;
+  input.message.role = "user";
+  ResponseInputContent content;
+  content.type = ResponseInputContent::Type::Text;
+  content.text = "Say hello";
+  input.message.content.push_back(std::move(content));
   request.input.push_back(std::move(input));
 
   auto response = client.responses().create(request);
@@ -62,6 +208,98 @@ TEST(ResponsesResourceTest, ParsesOutputTextAndUsage) {
 
   EXPECT_EQ(response.id, "resp_123");
   EXPECT_EQ(response.model, "gpt-4o-mini");
+  ASSERT_EQ(response.output.size(), 13u);
+  EXPECT_EQ(response.output[0].item_type, "message");
+  ASSERT_TRUE(response.output[0].message.has_value());
+  const auto& message = *response.output[0].message;
+  EXPECT_EQ(message.id, "msg_123");
+  ASSERT_TRUE(message.status.has_value());
+  EXPECT_EQ(*message.status, "completed");
+  ASSERT_EQ(message.content.size(), 3u);
+  EXPECT_EQ(message.content[0].type, ResponseOutputContent::Type::Text);
+  EXPECT_EQ(message.content[1].type, ResponseOutputContent::Type::Refusal);
+  EXPECT_EQ(message.content[2].type, ResponseOutputContent::Type::Text);
+  ASSERT_EQ(message.text_segments.size(), 2u);
+  const auto& first_segment_annotations = message.text_segments[0].annotations;
+  ASSERT_EQ(first_segment_annotations.size(), 1u);
+  EXPECT_EQ(first_segment_annotations[0].type, ResponseOutputTextAnnotation::Type::UrlCitation);
+  ASSERT_TRUE(first_segment_annotations[0].url.has_value());
+  EXPECT_EQ(*first_segment_annotations[0].url, "https://example.com");
+  const auto& second_segment_logprobs = message.text_segments[1].logprobs;
+  ASSERT_EQ(second_segment_logprobs.size(), 1u);
+  EXPECT_EQ(second_segment_logprobs[0].token, "world");
+  EXPECT_DOUBLE_EQ(second_segment_logprobs[0].logprob, -0.02);
+  ASSERT_EQ(second_segment_logprobs[0].top_logprobs.size(), 1u);
+  EXPECT_EQ(second_segment_logprobs[0].top_logprobs[0].token, "world");
+  EXPECT_EQ(response.output[1].item_type, "custom_tool_call");
+  EXPECT_EQ(response.output[1].type, ResponseOutputItem::Type::CustomToolCall);
+  ASSERT_TRUE(response.output[2].function_call.has_value());
+  const auto& function_call = *response.output[2].function_call;
+  EXPECT_EQ(function_call.id, "func_call_1");
+  ASSERT_TRUE(function_call.parsed_arguments.has_value());
+  EXPECT_EQ(function_call.parsed_arguments->at("location"), "SF");
+  ASSERT_TRUE(response.output[3].function_call_output.has_value());
+  const auto& function_call_output = *response.output[3].function_call_output;
+  EXPECT_EQ(function_call_output.id, "func_output_1");
+  ASSERT_TRUE(function_call_output.parsed_output_json.has_value());
+  EXPECT_EQ(function_call_output.parsed_output_json->at("temp"), 70);
+  ASSERT_TRUE(response.output[4].computer_call.has_value());
+  const auto& computer_call = *response.output[4].computer_call;
+  EXPECT_EQ(computer_call.id, "comp_1");
+  EXPECT_EQ(computer_call.action.type, ResponseComputerToolCall::Action::Type::Scroll);
+  ASSERT_TRUE(computer_call.action.scroll_y.has_value());
+  EXPECT_EQ(*computer_call.action.scroll_y, 200);
+  ASSERT_EQ(computer_call.pending_safety_checks.size(), 1u);
+  EXPECT_EQ(computer_call.pending_safety_checks[0].code, "human_review");
+  ASSERT_TRUE(response.output[6].web_search_call.has_value());
+  const auto& web_search_call = *response.output[6].web_search_call;
+  EXPECT_EQ(web_search_call.id, "ws_1");
+  ASSERT_EQ(web_search_call.actions.size(), 1u);
+  EXPECT_EQ(web_search_call.actions[0].type, ResponseFunctionWebSearch::Action::Type::Search);
+  ASSERT_EQ(web_search_call.actions[0].sources.size(), 1u);
+  EXPECT_EQ(web_search_call.actions[0].sources[0].url, "https://example.com/weather");
+  ASSERT_TRUE(response.output[5].computer_call_output.has_value());
+  const auto& computer_call_output = *response.output[5].computer_call_output;
+  EXPECT_EQ(computer_call_output.id, "comp_out_1");
+  ASSERT_TRUE(computer_call_output.screenshot.image_url.has_value());
+  EXPECT_EQ(*computer_call_output.screenshot.image_url, "https://example.com/screenshot.png");
+  ASSERT_EQ(computer_call_output.acknowledged_safety_checks.size(), 1u);
+  EXPECT_EQ(computer_call_output.acknowledged_safety_checks[0].id, "psc_1");
+  ASSERT_TRUE(response.output[7].local_shell_call.has_value());
+  const auto& local_shell_call = *response.output[7].local_shell_call;
+  EXPECT_EQ(local_shell_call.id, "shell_1");
+  EXPECT_EQ(local_shell_call.action.type, ResponseLocalShellCall::Action::Type::Exec);
+  ASSERT_EQ(local_shell_call.action.command.size(), 2u);
+  EXPECT_EQ(local_shell_call.action.command[0], "ls");
+  EXPECT_EQ(local_shell_call.action.env.at("PATH"), "/bin");
+  ASSERT_TRUE(local_shell_call.action.timeout_ms.has_value());
+  EXPECT_EQ(*local_shell_call.action.timeout_ms, 1000);
+  ASSERT_TRUE(local_shell_call.action.working_directory.has_value());
+  EXPECT_EQ(*local_shell_call.action.working_directory, "/tmp");
+  ASSERT_TRUE(response.output[8].local_shell_output.has_value());
+  const auto& local_shell_output = *response.output[8].local_shell_output;
+  EXPECT_EQ(local_shell_output.id, "shell_out_1");
+  ASSERT_TRUE(local_shell_output.parsed_output.has_value());
+  EXPECT_EQ(local_shell_output.parsed_output->at("stdout"), "ok");
+  ASSERT_TRUE(response.output[9].mcp_list_tools.has_value());
+  const auto& mcp_list = *response.output[9].mcp_list_tools;
+  EXPECT_EQ(mcp_list.id, "mcp_list");
+  ASSERT_EQ(mcp_list.tools.size(), 1u);
+  ASSERT_TRUE(mcp_list.tools[0].tags.has_value());
+  EXPECT_EQ(mcp_list.tools[0].tags->at(0), "docs");
+  ASSERT_TRUE(mcp_list.next_page_token.has_value());
+  EXPECT_EQ(*mcp_list.next_page_token, "token-2");
+  ASSERT_TRUE(response.output[10].mcp_call.has_value());
+  const auto& mcp_call = *response.output[10].mcp_call;
+  EXPECT_EQ(mcp_call.id, "mcp_call_1");
+  EXPECT_EQ(mcp_call.status, ResponseMcpCall::Status::Completed);
+  ASSERT_TRUE(response.output[11].mcp_approval_request.has_value());
+  const auto& mcp_request = *response.output[11].mcp_approval_request;
+  ASSERT_TRUE(mcp_request.suggested_decision.has_value());
+  EXPECT_EQ(*mcp_request.suggested_decision, ResponseMcpApprovalRequest::Decision::Approved);
+  ASSERT_TRUE(response.output[12].mcp_approval_response.has_value());
+  const auto& mcp_response = *response.output[12].mcp_approval_response;
+  EXPECT_EQ(mcp_response.decision, ResponseMcpApprovalResponse::Decision::Approved);
   ASSERT_EQ(response.messages.size(), 1u);
   EXPECT_EQ(response.messages[0].text_segments.size(), 2u);
   EXPECT_EQ(response.output_text, "Hello, world!");
@@ -136,9 +374,13 @@ TEST(ResponsesResourceTest, CreateStreamParsesEvents) {
 
   ResponseRequest request;
   request.model = "gpt-4o";
-  ResponseInput input;
-  input.role = "user";
-  input.content.push_back(ResponseInputContent{.text = "Stream please"});
+  ResponseInputItem input;
+  input.type = ResponseInputItem::Type::Message;
+  input.message.role = "user";
+  ResponseInputContent content;
+  content.type = ResponseInputContent::Type::Text;
+  content.text = "Stream please";
+  input.message.content.push_back(std::move(content));
   request.input.push_back(std::move(input));
 
   auto events = client.responses().create_stream(request);
@@ -235,21 +477,31 @@ TEST(ResponsesResourceTest, CreateSerializesTypedFields) {
   request.stream_options = stream_options;
   request.temperature = 0.1;
   request.top_p = 0.9;
-  request.tools.push_back(nlohmann::json::object({{"type", "file_search"}}));
-  request.tool_choice = nlohmann::json::object({{"type", "required"}});
+  ResponseToolDefinition file_search_tool;
+  file_search_tool.type = "file_search";
+  ResponseFileSearchToolDefinition file_search_definition;
+  file_search_definition.vector_store_ids = {"vs_123"};
+  file_search_tool.file_search = file_search_definition;
+  request.tools.push_back(std::move(file_search_tool));
 
-  ResponseInput input;
-  input.role = "user";
-  input.metadata["topic"] = "intro";
+  ResponseToolChoice tool_choice;
+  tool_choice.kind = ResponseToolChoice::Kind::Simple;
+  tool_choice.simple = ResponseToolChoiceSimpleOption::Required;
+  request.tool_choice = tool_choice;
+
+  ResponseInputItem input;
+  input.type = ResponseInputItem::Type::Message;
+  input.message.role = "user";
+  input.message.metadata["topic"] = "intro";
   ResponseInputContent text_content;
   text_content.type = ResponseInputContent::Type::Text;
   text_content.text = "Hello!";
-  input.content.push_back(text_content);
+  input.message.content.push_back(text_content);
   ResponseInputContent image_content;
   image_content.type = ResponseInputContent::Type::Image;
   image_content.image_url = "https://example.com/image.png";
   image_content.image_detail = "auto";
-  input.content.push_back(image_content);
+  input.message.content.push_back(image_content);
   request.input.push_back(std::move(input));
 
   auto response = client.responses().create(request);
@@ -281,7 +533,7 @@ TEST(ResponsesResourceTest, CreateSerializesTypedFields) {
   ASSERT_EQ(payload.at("tools").size(), 1u);
   EXPECT_EQ(payload.at("tools")[0].at("type"), "file_search");
   ASSERT_TRUE(payload.contains("tool_choice"));
-  EXPECT_EQ(payload.at("tool_choice").at("type"), "required");
+  EXPECT_EQ(payload.at("tool_choice"), "required");
 
   ASSERT_EQ(payload.at("input").size(), 1u);
   const auto& first_input = payload.at("input")[0];
@@ -295,4 +547,54 @@ TEST(ResponsesResourceTest, CreateSerializesTypedFields) {
   EXPECT_EQ(second_content.at("type"), "input_image");
   EXPECT_EQ(second_content.at("image_url"), "https://example.com/image.png");
   EXPECT_EQ(second_content.at("detail"), "auto");
+}
+
+TEST(ResponsesStreamEventTest, ParsesTextDeltaEvent) {
+  using namespace openai;
+
+  ServerSentEvent sse_event;
+  sse_event.event = "message";
+  sse_event.data = R"({
+    "type": "response.output_text.delta",
+    "content_index": 0,
+    "delta": "Hello",
+    "item_id": "item_1",
+    "output_index": 1,
+    "sequence_number": 2,
+    "logprobs": [
+      { "token": "Hello", "logprob": -0.1, "top_logprobs": [ { "token": "Hello", "logprob": -0.1 } ] }
+    ]
+  })";
+
+  auto parsed = parse_response_stream_event(sse_event);
+  ASSERT_TRUE(parsed.has_value());
+  EXPECT_EQ(parsed->type, ResponseStreamEvent::Type::OutputTextDelta);
+  ASSERT_TRUE(parsed->text_delta.has_value());
+  EXPECT_EQ(parsed->text_delta->delta, "Hello");
+  EXPECT_EQ(parsed->text_delta->sequence_number, 2);
+  ASSERT_EQ(parsed->text_delta->logprobs.size(), 1u);
+  EXPECT_EQ(parsed->text_delta->logprobs[0].token, "Hello");
+  ASSERT_EQ(parsed->text_delta->logprobs[0].top_logprobs.size(), 1u);
+}
+
+TEST(ResponsesStreamEventTest, ParsesFunctionArgumentsDoneEvent) {
+  using namespace openai;
+
+  ServerSentEvent sse_event;
+  sse_event.event = "message";
+  sse_event.data = R"({
+    "type": "response.function_call_arguments.done",
+    "arguments": "{\"location\":\"SF\"}",
+    "item_id": "item_2",
+    "name": "weather",
+    "output_index": 0,
+    "sequence_number": 5
+  })";
+
+  auto parsed = parse_response_stream_event(sse_event);
+  ASSERT_TRUE(parsed.has_value());
+  EXPECT_EQ(parsed->type, ResponseStreamEvent::Type::FunctionCallArgumentsDone);
+  ASSERT_TRUE(parsed->function_arguments_done.has_value());
+  EXPECT_EQ(parsed->function_arguments_done->name, "weather");
+  EXPECT_EQ(parsed->function_arguments_done->sequence_number, 5);
 }

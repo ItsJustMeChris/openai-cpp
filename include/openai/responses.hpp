@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -11,20 +13,711 @@
 
 namespace openai {
 
+struct ResponseInputContent;
+
+struct ResponseUsageInputTokensDetails {
+  std::optional<int> cached_tokens;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseUsageOutputTokensDetails {
+  std::optional<int> reasoning_tokens;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct ResponseUsage {
   int input_tokens = 0;
   int output_tokens = 0;
   int total_tokens = 0;
+  std::optional<ResponseUsageInputTokensDetails> input_tokens_details;
+  std::optional<ResponseUsageOutputTokensDetails> output_tokens_details;
   nlohmann::json extra = nlohmann::json::object();
+};
+
+struct ResponseError {
+  std::optional<std::string> code;
+  std::string message;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseIncompleteDetails {
+  std::optional<std::string> reason;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseConversationRef {
+  std::string id;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseFunctionToolDefinition {
+  std::string name;
+  std::optional<std::string> description;
+  std::optional<nlohmann::json> parameters;
+  std::optional<bool> strict;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseCustomToolFormat {
+  enum class Type {
+    Text,
+    Grammar,
+    Unknown
+  };
+
+  Type type = Type::Unknown;
+  std::optional<std::string> definition;
+  std::optional<std::string> syntax;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseCustomToolDefinition {
+  std::string name;
+  std::optional<std::string> description;
+  std::optional<ResponseCustomToolFormat> format;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseCustomToolCall {
+  std::string call_id;
+  std::string input;
+  std::string name;
+  std::optional<std::string> id;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseFileSearchRankingOptions {
+  std::optional<std::string> ranker;
+  std::optional<double> score_threshold;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseFileSearchToolCallResult {
+  std::optional<nlohmann::json> attributes;
+  std::optional<std::string> file_id;
+  std::optional<std::string> filename;
+  std::optional<double> score;
+  std::optional<std::string> text;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseFileSearchToolCall {
+  std::string id;
+  std::vector<std::string> queries;
+  std::string status;
+  std::vector<ResponseFileSearchToolCallResult> results;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseSearchFilter {
+  struct Comparison {
+    enum class Operator {
+      Eq,
+      Ne,
+      Gt,
+      Gte,
+      Lt,
+      Lte,
+      In,
+      Nin,
+      Unknown
+    };
+
+    std::string key;
+    Operator op = Operator::Unknown;
+    nlohmann::json value;
+  };
+
+  struct Compound {
+    enum class Logical {
+      And,
+      Or,
+      Unknown
+    };
+
+    Logical logical = Logical::Unknown;
+    std::vector<ResponseSearchFilter> filters;
+  };
+
+  enum class Type {
+    Comparison,
+    Compound,
+    Unknown
+  };
+
+  Type type = Type::Unknown;
+  std::optional<Comparison> comparison;
+  std::optional<Compound> compound;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseFileSearchToolDefinition {
+  std::vector<std::string> vector_store_ids;
+  std::optional<ResponseSearchFilter> filters;
+  std::optional<int> max_num_results;
+  std::optional<ResponseFileSearchRankingOptions> ranking_options;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+enum class ResponseComputerEnvironment {
+  Windows,
+  Mac,
+  Linux,
+  Ubuntu,
+  Browser,
+  Unknown
+};
+
+struct ResponseComputerToolDefinition {
+  int display_height = 0;
+  int display_width = 0;
+  ResponseComputerEnvironment environment = ResponseComputerEnvironment::Unknown;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseWebSearchToolFilters {
+  std::vector<std::string> allowed_domains;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseWebSearchToolUserLocation {
+  std::optional<std::string> city;
+  std::optional<std::string> country;
+  std::optional<std::string> region;
+  std::optional<std::string> timezone;
+  std::optional<std::string> type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseWebSearchToolDefinition {
+  std::string type = "web_search";
+  std::optional<ResponseWebSearchToolFilters> filters;
+  std::optional<std::string> search_context_size;
+  std::optional<ResponseWebSearchToolUserLocation> user_location;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseWebSearchPreviewUserLocation {
+  std::optional<std::string> city;
+  std::optional<std::string> country;
+  std::optional<std::string> region;
+  std::optional<std::string> timezone;
+  std::optional<std::string> type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseWebSearchPreviewToolDefinition {
+  std::string type = "web_search_preview";
+  std::optional<std::string> search_context_size;
+  std::optional<ResponseWebSearchPreviewUserLocation> user_location;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseCodeInterpreterAutoContainer {
+  std::vector<std::string> file_ids;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseCodeInterpreterToolDefinition {
+  std::variant<std::monostate, std::string, ResponseCodeInterpreterAutoContainer> container;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseImageGenerationToolMask {
+  std::optional<std::string> image_url;
+  std::optional<std::string> file_id;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseImageGenerationToolDefinition {
+  std::optional<std::string> background;
+  std::optional<std::string> input_fidelity;
+  std::optional<ResponseImageGenerationToolMask> input_image_mask;
+  std::optional<std::string> model;
+  std::optional<std::string> moderation;
+  std::optional<int> output_compression;
+  std::optional<std::string> output_format;
+  std::optional<std::string> visual_quality;
+  std::optional<int> width;
+  std::optional<int> height;
+  std::optional<std::string> aspect_ratio;
+  std::optional<int> seed;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseLocalShellToolDefinition {
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseMcpToolFilter {
+  std::optional<bool> read_only;
+  std::vector<std::string> tool_names;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseMcpToolApprovalFilter {
+  std::optional<ResponseMcpToolFilter> always;
+  std::optional<ResponseMcpToolFilter> never;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseMcpToolDefinition {
+  std::string server_label;
+  std::optional<std::vector<std::string>> allowed_tool_names;
+  std::optional<ResponseMcpToolFilter> allowed_tool_filter;
+  std::optional<std::string> authorization;
+  std::optional<std::string> connector_id;
+  std::map<std::string, std::string> headers;
+  std::variant<std::monostate, std::string, ResponseMcpToolApprovalFilter> require_approval;
+  std::optional<std::string> server_description;
+  std::optional<std::string> server_url;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseFunctionToolCall {
+  std::string id;
+  std::string call_id;
+  std::string name;
+  std::string arguments;
+  std::optional<std::string> status;
+  std::optional<nlohmann::json> parsed_arguments;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseFunctionToolCallOutput {
+  std::string id;
+  std::string call_id;
+  std::optional<std::string> output_text;
+  std::optional<nlohmann::json> output_content;
+  std::optional<std::string> status;
+  std::optional<nlohmann::json> parsed_output_json;
+  std::vector<ResponseInputContent> structured_output;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseFunctionWebSearch {
+  struct Action {
+    enum class Type {
+      Search,
+      OpenPage,
+      Find,
+      Unknown
+    };
+
+    struct Source {
+      std::string url;
+      nlohmann::json raw = nlohmann::json::object();
+    };
+
+    Type type = Type::Unknown;
+    std::optional<std::string> query;
+    std::optional<std::string> url;
+    std::optional<std::string> pattern;
+    std::vector<Source> sources;
+    nlohmann::json raw = nlohmann::json::object();
+  };
+
+  std::string id;
+  std::string status;
+  std::vector<Action> actions;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseReasoningSummary {
+  std::string text;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseReasoningContent {
+  std::string text;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseReasoningItemDetails {
+  std::string id;
+  std::vector<ResponseReasoningSummary> summary;
+  std::vector<ResponseReasoningContent> content;
+  std::optional<std::string> encrypted_content;
+  std::optional<std::string> status;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseCodeInterpreterLogOutput {
+  std::string logs;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseCodeInterpreterImageOutput {
+  std::string url;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseCodeInterpreterToolCall {
+  std::string id;
+  std::optional<std::string> code;
+  std::string container_id;
+  std::vector<ResponseCodeInterpreterLogOutput> log_outputs;
+  std::vector<ResponseCodeInterpreterImageOutput> image_outputs;
+  std::optional<std::string> status;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseImageGenerationCall {
+  std::string id;
+  std::optional<std::string> result;
+  std::string status;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseComputerToolCall {
+  struct Action {
+    enum class Type {
+      Click,
+      DoubleClick,
+      Drag,
+      Keypress,
+      Move,
+      Screenshot,
+      Scroll,
+      Type,
+      Wait,
+      Unknown
+    };
+
+    struct DragPathPoint {
+      int x = 0;
+      int y = 0;
+    };
+
+    Type type = Type::Unknown;
+    std::optional<std::string> button;
+    std::optional<int> x;
+    std::optional<int> y;
+    std::vector<DragPathPoint> path;
+    std::vector<std::string> keys;
+    std::optional<int> scroll_x;
+    std::optional<int> scroll_y;
+    std::optional<std::string> text;
+    nlohmann::json raw = nlohmann::json::object();
+  };
+
+  struct PendingSafetyCheck {
+    std::string id;
+    std::string code;
+    std::string message;
+    nlohmann::json raw = nlohmann::json::object();
+  };
+
+  std::string id;
+  std::string call_id;
+  std::string status;
+  Action action;
+  std::vector<PendingSafetyCheck> pending_safety_checks;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseComputerToolCallOutputScreenshot {
+  std::optional<std::string> file_id;
+  std::optional<std::string> image_url;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseComputerToolCallOutput {
+  std::string id;
+  std::string call_id;
+  ResponseComputerToolCallOutputScreenshot screenshot;
+  std::vector<ResponseComputerToolCall::PendingSafetyCheck> acknowledged_safety_checks;
+  std::optional<std::string> status;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseLocalShellCall {
+  struct Action {
+    enum class Type {
+      Exec,
+      Unknown
+    };
+
+    Type type = Type::Unknown;
+    std::vector<std::string> command;
+    std::map<std::string, std::string> env;
+    std::optional<int> timeout_ms;
+    std::optional<std::string> user;
+    std::optional<std::string> working_directory;
+    nlohmann::json raw = nlohmann::json::object();
+  };
+
+  std::string id;
+  std::string call_id;
+  std::optional<std::string> status;
+  Action action;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseLocalShellOutput {
+  std::string id;
+  std::string output;
+  std::optional<std::string> status;
+  std::optional<nlohmann::json> parsed_output;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseMcpCall {
+  enum class Status {
+    InProgress,
+    Completed,
+    Incomplete,
+    Calling,
+    Failed,
+    Unknown
+  };
+
+  std::string id;
+  std::string arguments;
+  std::string name;
+  std::string server_label;
+  Status status = Status::Unknown;
+  std::optional<std::string> approval_request_id;
+  std::optional<std::string> error;
+  std::optional<std::string> output;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseMcpListToolsItem {
+  std::string name;
+  nlohmann::json input_schema = nlohmann::json::object();
+  std::optional<std::string> description;
+  std::optional<std::vector<std::string>> tags;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseMcpListTools {
+  std::string id;
+  std::string server_label;
+  std::vector<ResponseMcpListToolsItem> tools;
+  std::optional<std::string> error;
+  std::optional<std::string> next_page_token;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseMcpApprovalRequest {
+  enum class Decision {
+    Pending,
+    Approved,
+    Rejected,
+    Unknown
+  };
+
+  std::string id;
+  std::string arguments;
+  std::optional<std::string> name;
+  std::optional<std::string> server_label;
+  std::optional<Decision> suggested_decision;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseMcpApprovalResponse {
+  enum class Decision {
+    Approved,
+    Rejected,
+    Unknown
+  };
+
+  std::string id;
+  Decision decision = Decision::Unknown;
+  std::optional<std::string> reason;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseToolDefinition {
+  std::string type;
+  std::optional<ResponseFunctionToolDefinition> function;
+  std::optional<ResponseFileSearchToolDefinition> file_search;
+  std::optional<ResponseComputerToolDefinition> computer;
+  std::optional<ResponseWebSearchToolDefinition> web_search;
+  std::optional<ResponseWebSearchPreviewToolDefinition> web_search_preview;
+  std::optional<ResponseMcpToolDefinition> mcp;
+  std::optional<ResponseCodeInterpreterToolDefinition> code_interpreter;
+  std::optional<ResponseImageGenerationToolDefinition> image_generation;
+  std::optional<ResponseLocalShellToolDefinition> local_shell;
+  std::optional<ResponseCustomToolDefinition> custom;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+enum class ResponseToolChoiceSimpleOption {
+  None,
+  Auto,
+  Required
+};
+
+enum class ResponseToolChoiceAllowedMode {
+  Auto,
+  Required
+};
+
+struct ResponseToolChoiceAllowed {
+  ResponseToolChoiceAllowedMode mode = ResponseToolChoiceAllowedMode::Auto;
+  std::vector<ResponseToolDefinition> tools;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseToolChoiceFunction {
+  std::string name;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseToolChoiceCustom {
+  std::string name;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseToolChoiceMcp {
+  std::string server_label;
+  std::optional<std::string> name;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseToolChoiceTypes {
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseToolChoice {
+  enum class Kind {
+    Simple,
+    Allowed,
+    Function,
+    Mcp,
+    Types,
+    Custom,
+    Unknown
+  };
+
+  Kind kind = Kind::Simple;
+  ResponseToolChoiceSimpleOption simple = ResponseToolChoiceSimpleOption::Auto;
+  std::optional<ResponseToolChoiceAllowed> allowed;
+  std::optional<ResponseToolChoiceFunction> function;
+  std::optional<ResponseToolChoiceMcp> mcp;
+  std::optional<ResponseToolChoiceTypes> types;
+  std::optional<ResponseToolChoiceCustom> custom;
+  nlohmann::json raw = nlohmann::json();
+};
+
+struct ResponseOutputTextAnnotation {
+  enum class Type {
+    FileCitation,
+    UrlCitation,
+    ContainerFileCitation,
+    FilePath,
+    Unknown
+  };
+
+  Type type = Type::Unknown;
+  std::optional<std::string> file_id;
+  std::optional<std::string> filename;
+  std::optional<int> index;
+  std::optional<int> start_index;
+  std::optional<int> end_index;
+  std::optional<std::string> title;
+  std::optional<std::string> url;
+  std::optional<std::string> container_id;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseOutputTextLogprobTop {
+  std::string token;
+  std::vector<std::uint8_t> bytes;
+  double logprob = 0.0;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseOutputTextLogprob {
+  std::string token;
+  std::vector<std::uint8_t> bytes;
+  double logprob = 0.0;
+  std::vector<ResponseOutputTextLogprobTop> top_logprobs;
+  nlohmann::json raw = nlohmann::json::object();
 };
 
 struct ResponseOutputTextSegment {
   std::string text;
+  std::vector<ResponseOutputTextAnnotation> annotations;
+  std::vector<ResponseOutputTextLogprob> logprobs;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseOutputRefusalSegment {
+  std::string refusal;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseOutputContent {
+  enum class Type {
+    Text,
+    Refusal,
+    Raw
+  };
+
+  Type type = Type::Raw;
+  std::optional<ResponseOutputTextSegment> text;
+  std::optional<ResponseOutputRefusalSegment> refusal;
+  nlohmann::json raw = nlohmann::json::object();
 };
 
 struct ResponseOutputMessage {
-  std::string role;
+  std::string id;
+  std::string role = "assistant";
+  std::optional<std::string> status;
+  std::vector<ResponseOutputContent> content;
   std::vector<ResponseOutputTextSegment> text_segments;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseOutputItem {
+  enum class Type {
+    Message,
+    FileSearchToolCall,
+    FunctionToolCall,
+    FunctionToolCallOutput,
+    ComputerToolCall,
+    ComputerToolCallOutput,
+    Reasoning,
+    ImageGenerationCall,
+    CodeInterpreterToolCall,
+    LocalShellCall,
+    LocalShellOutput,
+    McpCall,
+    McpListTools,
+    McpApprovalRequest,
+    McpApprovalResponse,
+    FunctionWebSearch,
+    CustomToolCall,
+    Raw
+  };
+
+  Type type = Type::Raw;
+  std::string item_type;
+  std::optional<ResponseOutputMessage> message;
+  std::optional<ResponseFileSearchToolCall> file_search_call;
+  std::optional<ResponseFunctionToolCall> function_call;
+  std::optional<ResponseFunctionToolCallOutput> function_call_output;
+  std::optional<ResponseFunctionWebSearch> web_search_call;
+  std::optional<ResponseComputerToolCall> computer_call;
+  std::optional<ResponseComputerToolCallOutput> computer_call_output;
+  std::optional<ResponseCodeInterpreterToolCall> code_interpreter_call;
+  std::optional<ResponseImageGenerationCall> image_generation_call;
+  std::optional<ResponseReasoningItemDetails> reasoning;
+  std::optional<ResponseCustomToolCall> custom_tool_call;
+  std::optional<ResponseLocalShellCall> local_shell_call;
+  std::optional<ResponseLocalShellOutput> local_shell_output;
+  std::optional<ResponseMcpCall> mcp_call;
+  std::optional<ResponseMcpListTools> mcp_list_tools;
+  std::optional<ResponseMcpApprovalRequest> mcp_approval_request;
+  std::optional<ResponseMcpApprovalResponse> mcp_approval_response;
+  nlohmann::json raw_details = nlohmann::json::object();
+  nlohmann::json raw = nlohmann::json::object();
 };
 
 struct Response {
@@ -32,6 +725,19 @@ struct Response {
   std::string object;
   int created = 0;
   std::string model;
+  std::optional<ResponseError> error;
+  std::optional<ResponseIncompleteDetails> incomplete_details;
+  std::optional<ResponseConversationRef> conversation;
+  std::map<std::string, std::string> metadata;
+  std::optional<bool> background;
+  std::optional<int> max_output_tokens;
+  std::optional<std::string> previous_response_id;
+  std::optional<double> temperature;
+  std::optional<double> top_p;
+  std::optional<bool> parallel_tool_calls;
+  std::vector<ResponseToolDefinition> tools;
+  std::optional<ResponseToolChoice> tool_choice;
+  std::vector<ResponseOutputItem> output;
   std::vector<ResponseOutputMessage> messages;
   std::string output_text;
   std::optional<ResponseUsage> usage;
@@ -42,6 +748,7 @@ struct ResponseInputContent {
   enum class Type { Text, Image, File, Audio, Raw };
 
   Type type = Type::Text;
+  std::optional<std::string> id;
   std::string text;
   std::string image_url;
   std::string image_detail;
@@ -53,10 +760,58 @@ struct ResponseInputContent {
   nlohmann::json raw = nlohmann::json::object();
 };
 
-struct ResponseInput {
+struct ResponseInputMessage {
   std::string role;
   std::vector<ResponseInputContent> content;
   std::map<std::string, std::string> metadata;
+  std::optional<std::string> id;
+  std::optional<std::string> status;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseInputTextItem {
+  std::string text;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseInputImageItem {
+  std::optional<std::string> image_url;
+  std::optional<std::string> file_id;
+  std::optional<std::string> detail;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseInputFileItem {
+  std::optional<std::string> file_data;
+  std::optional<std::string> file_id;
+  std::optional<std::string> file_url;
+  std::optional<std::string> filename;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseInputAudioItem {
+  std::string data;
+  std::string format;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseInputItem {
+  enum class Type {
+    Message,
+    InputText,
+    InputImage,
+    InputFile,
+    InputAudio,
+    Raw
+  };
+
+  Type type = Type::Message;
+  ResponseInputMessage message;
+  std::optional<ResponseInputTextItem> input_text;
+  std::optional<ResponseInputImageItem> input_image;
+  std::optional<ResponseInputFileItem> input_file;
+  std::optional<ResponseInputAudioItem> input_audio;
+  nlohmann::json raw = nlohmann::json::object();
 };
 
 struct ResponsePrompt {
@@ -77,7 +832,7 @@ struct ResponseStreamOptions {
 
 struct ResponseRequest {
   std::string model;
-  std::vector<ResponseInput> input;
+  std::vector<ResponseInputItem> input;
   std::map<std::string, std::string> metadata;
   std::optional<bool> background;
   std::optional<std::string> conversation_id;
@@ -96,8 +851,8 @@ struct ResponseRequest {
   std::optional<ResponseStreamOptions> stream_options;
   std::optional<double> temperature;
   std::optional<double> top_p;
-  std::vector<nlohmann::json> tools;
-  std::optional<nlohmann::json> tool_choice;
+  std::vector<ResponseToolDefinition> tools;
+  std::optional<ResponseToolChoice> tool_choice;
 };
 
 struct ResponseRetrieveOptions {
@@ -109,6 +864,62 @@ struct ResponseList {
   bool has_more = false;
   nlohmann::json raw = nlohmann::json::object();
 };
+
+struct ResponseTextDeltaEvent {
+  int content_index = 0;
+  std::string delta;
+  std::string item_id;
+  std::vector<ResponseOutputTextLogprob> logprobs;
+  int output_index = 0;
+  int sequence_number = 0;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseTextDoneEvent {
+  int content_index = 0;
+  std::string item_id;
+  std::string text;
+  int output_index = 0;
+  int sequence_number = 0;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseFunctionCallArgumentsDeltaEvent {
+  std::string delta;
+  std::string item_id;
+  int output_index = 0;
+  int sequence_number = 0;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseFunctionCallArgumentsDoneEvent {
+  std::string arguments;
+  std::string item_id;
+  std::string name;
+  int output_index = 0;
+  int sequence_number = 0;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseStreamEvent {
+  enum class Type {
+    OutputTextDelta,
+    OutputTextDone,
+    FunctionCallArgumentsDelta,
+    FunctionCallArgumentsDone,
+    Unknown
+  };
+
+  Type type = Type::Unknown;
+  std::optional<ResponseTextDeltaEvent> text_delta;
+  std::optional<ResponseTextDoneEvent> text_done;
+  std::optional<ResponseFunctionCallArgumentsDeltaEvent> function_arguments_delta;
+  std::optional<ResponseFunctionCallArgumentsDoneEvent> function_arguments_done;
+  std::optional<std::string> event_name;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+std::optional<ResponseStreamEvent> parse_response_stream_event(const struct ServerSentEvent& event);
 
 class OpenAIClient;
 

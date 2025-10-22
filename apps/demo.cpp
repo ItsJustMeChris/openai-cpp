@@ -17,7 +17,7 @@ int main() {
     openai::OpenAIClient client(options);
 
     openai::CompletionRequest request;
-    request.model = "gpt-5-mini";
+    request.model = "gpt-3.5-turbo-instruct";
     request.prompt = "Say hello from C++";
     request.max_tokens = 32;
 
