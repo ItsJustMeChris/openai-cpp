@@ -1,4 +1,5 @@
 #include "openai/responses.hpp"
+#include "openai/response_stream.hpp"
 
 #include "openai/client.hpp"
 #include "openai/error.hpp"
@@ -17,6 +18,9 @@ namespace {
 using json = nlohmann::json;
 
 const char* kResponseEndpoint = "/responses";
+
+Response parse_response(const json& payload);
+ResponseOutputItem parse_output_item(const json& payload);
 
 std::string to_string(ResponseComputerEnvironment environment) {
   switch (environment) {
@@ -1500,6 +1504,101 @@ ResponseStreamEvent parse_stream_event_payload(const json& payload, const std::o
   }
 
   const std::string type = payload.value("type", std::string{});
+  event.type_name = type;
+  event.sequence_number = payload.value("sequence_number", 0);
+
+  if (type == "response.created") {
+    if (payload.contains("response") && payload.at("response").is_object()) {
+      ResponseCreatedEvent created;
+      created.raw = payload;
+      created.sequence_number = event.sequence_number;
+      created.response = parse_response(payload.at("response"));
+      event.type = ResponseStreamEvent::Type::Created;
+      event.created = std::move(created);
+      return event;
+    }
+  }
+
+  if (type == "response.completed") {
+    if (payload.contains("response") && payload.at("response").is_object()) {
+      ResponseCompletedEvent completed;
+      completed.raw = payload;
+      completed.sequence_number = event.sequence_number;
+      completed.response = parse_response(payload.at("response"));
+      event.type = ResponseStreamEvent::Type::Completed;
+      event.completed = std::move(completed);
+      return event;
+    }
+  }
+
+  if (type == "response.output_item.added") {
+    if (payload.contains("item") && payload.at("item").is_object()) {
+      ResponseOutputItemAddedEvent added;
+      added.raw = payload;
+      added.sequence_number = event.sequence_number;
+      added.output_index = payload.value("output_index", 0);
+      added.item = parse_output_item(payload.at("item"));
+      added.item_id = payload.at("item").value("id", std::string{});
+      event.type = ResponseStreamEvent::Type::OutputItemAdded;
+      event.output_item_added = std::move(added);
+      return event;
+    }
+  }
+
+  if (type == "response.output_item.done") {
+    if (payload.contains("item") && payload.at("item").is_object()) {
+      ResponseOutputItemDoneEvent done;
+      done.raw = payload;
+      done.sequence_number = event.sequence_number;
+      done.output_index = payload.value("output_index", 0);
+      done.item = parse_output_item(payload.at("item"));
+      done.item_id = payload.at("item").value("id", std::string{});
+      event.type = ResponseStreamEvent::Type::OutputItemDone;
+      event.output_item_done = std::move(done);
+      return event;
+    }
+  }
+
+  if (type == "response.content_part.added") {
+    ResponseContentPartAddedEvent part;
+    part.raw = payload;
+    part.content_index = payload.value("content_index", 0);
+    part.output_index = payload.value("output_index", 0);
+    part.item_id = payload.value("item_id", std::string{});
+    if (payload.contains("part") && payload.at("part").is_object()) {
+      const auto& part_json = payload.at("part");
+      const std::string part_type = part_json.value("type", std::string{});
+      if (part_type == "reasoning_text" || part_type == "reasoning_summary" || part_type == "rationale") {
+        part.reasoning_part = parse_reasoning_content(part_json);
+      } else {
+        part.content_part = parse_output_content(part_json);
+      }
+    }
+    event.type = ResponseStreamEvent::Type::ContentPartAdded;
+    event.content_part_added = std::move(part);
+    return event;
+  }
+
+  if (type == "response.content_part.done") {
+    ResponseContentPartDoneEvent part;
+    part.raw = payload;
+    part.content_index = payload.value("content_index", 0);
+    part.output_index = payload.value("output_index", 0);
+    part.item_id = payload.value("item_id", std::string{});
+    if (payload.contains("part") && payload.at("part").is_object()) {
+      const auto& part_json = payload.at("part");
+      const std::string part_type = part_json.value("type", std::string{});
+      if (part_type == "reasoning_text" || part_type == "reasoning_summary" || part_type == "rationale") {
+        part.reasoning_part = parse_reasoning_content(part_json);
+      } else {
+        part.content_part = parse_output_content(part_json);
+      }
+    }
+    event.type = ResponseStreamEvent::Type::ContentPartDone;
+    event.content_part_done = std::move(part);
+    return event;
+  }
+
   if (type == "response.output_text.delta") {
     ResponseTextDeltaEvent delta;
     delta.raw = payload;
@@ -1507,7 +1606,7 @@ ResponseStreamEvent parse_stream_event_payload(const json& payload, const std::o
     delta.delta = payload.value("delta", std::string{});
     delta.item_id = payload.value("item_id", std::string{});
     delta.output_index = payload.value("output_index", 0);
-    delta.sequence_number = payload.value("sequence_number", 0);
+    delta.sequence_number = event.sequence_number;
     if (payload.contains("logprobs") && payload.at("logprobs").is_array()) {
       for (const auto& entry : payload.at("logprobs")) {
         delta.logprobs.push_back(parse_text_delta_logprob(entry));
@@ -1525,7 +1624,12 @@ ResponseStreamEvent parse_stream_event_payload(const json& payload, const std::o
     done.item_id = payload.value("item_id", std::string{});
     done.text = payload.value("text", std::string{});
     done.output_index = payload.value("output_index", 0);
-    done.sequence_number = payload.value("sequence_number", 0);
+    done.sequence_number = event.sequence_number;
+    if (payload.contains("logprobs") && payload.at("logprobs").is_array()) {
+      for (const auto& entry : payload.at("logprobs")) {
+        done.logprobs.push_back(parse_text_delta_logprob(entry));
+      }
+    }
     event.type = ResponseStreamEvent::Type::OutputTextDone;
     event.text_done = std::move(done);
     return event;
@@ -1537,7 +1641,7 @@ ResponseStreamEvent parse_stream_event_payload(const json& payload, const std::o
     delta.delta = payload.value("delta", std::string{});
     delta.item_id = payload.value("item_id", std::string{});
     delta.output_index = payload.value("output_index", 0);
-    delta.sequence_number = payload.value("sequence_number", 0);
+    delta.sequence_number = event.sequence_number;
     event.type = ResponseStreamEvent::Type::FunctionCallArgumentsDelta;
     event.function_arguments_delta = std::move(delta);
     return event;
@@ -1550,9 +1654,35 @@ ResponseStreamEvent parse_stream_event_payload(const json& payload, const std::o
     done.item_id = payload.value("item_id", std::string{});
     done.name = payload.value("name", std::string{});
     done.output_index = payload.value("output_index", 0);
-    done.sequence_number = payload.value("sequence_number", 0);
+    done.sequence_number = event.sequence_number;
     event.type = ResponseStreamEvent::Type::FunctionCallArgumentsDone;
     event.function_arguments_done = std::move(done);
+    return event;
+  }
+
+  if (type == "response.reasoning_text.delta") {
+    ResponseReasoningTextDeltaEvent delta;
+    delta.raw = payload;
+    delta.content_index = payload.value("content_index", 0);
+    delta.item_id = payload.value("item_id", std::string{});
+    delta.output_index = payload.value("output_index", 0);
+    delta.sequence_number = event.sequence_number;
+    delta.delta = payload.value("delta", std::string{});
+    event.type = ResponseStreamEvent::Type::ReasoningTextDelta;
+    event.reasoning_text_delta = std::move(delta);
+    return event;
+  }
+
+  if (type == "response.reasoning_text.done") {
+    ResponseReasoningTextDoneEvent done;
+    done.raw = payload;
+    done.content_index = payload.value("content_index", 0);
+    done.item_id = payload.value("item_id", std::string{});
+    done.output_index = payload.value("output_index", 0);
+    done.sequence_number = event.sequence_number;
+    done.text = payload.value("text", std::string{});
+    event.type = ResponseStreamEvent::Type::ReasoningTextDone;
+    event.reasoning_text_done = std::move(done);
     return event;
   }
 
@@ -2047,8 +2177,17 @@ Response parse_response(const json& payload) {
   response.raw = payload;
   response.id = payload.value("id", "");
   response.object = payload.value("object", "");
-  response.created = payload.value("created", 0);
+  if (payload.contains("created") && payload.at("created").is_number_integer()) {
+    response.created = payload.at("created").get<int>();
+  } else if (payload.contains("created_at") && payload.at("created_at").is_number_integer()) {
+    response.created = payload.at("created_at").get<int>();
+  } else {
+    response.created = 0;
+  }
   response.model = payload.value("model", "");
+  if (payload.contains("status") && payload.at("status").is_string()) {
+    response.status = payload.at("status").get<std::string>();
+  }
 
   if (payload.contains("metadata") && payload.at("metadata").is_object()) {
     for (auto it = payload.at("metadata").begin(); it != payload.at("metadata").end(); ++it) {
@@ -2345,6 +2484,23 @@ void ResponsesResource::create_stream(const ResponseRequest& request,
   create_stream(request, on_event, RequestOptions{});
 }
 
+ResponseStreamSnapshot ResponsesResource::create_stream_snapshot(const ResponseRequest& request,
+                                                                 const RequestOptions& options) const {
+  ResponseStreamSnapshot snapshot;
+  create_stream(
+      request,
+      [&](const ResponseStreamEvent& event) {
+        snapshot.ingest(event);
+        return true;
+      },
+      options);
+  return snapshot;
+}
+
+ResponseStreamSnapshot ResponsesResource::create_stream_snapshot(const ResponseRequest& request) const {
+  return create_stream_snapshot(request, RequestOptions{});
+}
+
 std::vector<ServerSentEvent> ResponsesResource::retrieve_stream(const std::string& response_id,
                                                                 const ResponseRetrieveOptions& retrieve_options,
                                                                 const RequestOptions& options) const {
@@ -2364,6 +2520,33 @@ std::vector<ServerSentEvent> ResponsesResource::retrieve_stream(const std::strin
 
 std::vector<ServerSentEvent> ResponsesResource::retrieve_stream(const std::string& response_id) const {
   return retrieve_stream(response_id, ResponseRetrieveOptions{.stream = true}, RequestOptions{});
+}
+
+ResponseStreamSnapshot ResponsesResource::retrieve_stream_snapshot(const std::string& response_id,
+                                                                   const ResponseRetrieveOptions& retrieve_options,
+                                                                   const RequestOptions& options) const {
+  ResponseStreamSnapshot snapshot;
+  SSEEventStream stream([&](const ServerSentEvent& sse_event) {
+    if (auto parsed = parse_response_stream_event(sse_event)) {
+      snapshot.ingest(*parsed);
+    }
+    return true;
+  });
+
+  RequestOptions request_options = options;
+  request_options.headers["Accept"] = "text/event-stream";
+  request_options.collect_body = false;
+  request_options.query_params["stream"] = retrieve_options.stream ? "true" : "false";
+  request_options.on_chunk = [&](const char* data, std::size_t size) { stream.feed(data, size); };
+
+  client_.perform_request("GET", build_response_path(response_id), "", request_options);
+
+  stream.finalize();
+  return snapshot;
+}
+
+ResponseStreamSnapshot ResponsesResource::retrieve_stream_snapshot(const std::string& response_id) const {
+  return retrieve_stream_snapshot(response_id, ResponseRetrieveOptions{.stream = true}, RequestOptions{});
 }
 
 ResponseItemList ResponsesResource::InputItemsResource::list(const std::string& response_id) const {

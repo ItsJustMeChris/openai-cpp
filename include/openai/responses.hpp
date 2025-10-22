@@ -726,6 +726,7 @@ struct Response {
   std::string object;
   int created = 0;
   std::string model;
+  std::optional<std::string> status;
   std::optional<ResponseError> error;
   std::optional<ResponseIncompleteDetails> incomplete_details;
   std::optional<ResponseConversationRef> conversation;
@@ -909,6 +910,7 @@ struct ResponseTextDoneEvent {
   std::string text;
   int output_index = 0;
   int sequence_number = 0;
+  std::vector<ResponseOutputTextLogprob> logprobs;
   nlohmann::json raw = nlohmann::json::object();
 };
 
@@ -929,20 +931,102 @@ struct ResponseFunctionCallArgumentsDoneEvent {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct ResponseReasoningTextDeltaEvent {
+  int content_index = 0;
+  std::string item_id;
+  int output_index = 0;
+  int sequence_number = 0;
+  std::string delta;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseReasoningTextDoneEvent {
+  int content_index = 0;
+  std::string item_id;
+  int output_index = 0;
+  int sequence_number = 0;
+  std::string text;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseContentPartAddedEvent {
+  int content_index = 0;
+  int output_index = 0;
+  std::string item_id;
+  std::optional<ResponseOutputContent> content_part;
+  std::optional<ResponseReasoningContent> reasoning_part;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseContentPartDoneEvent {
+  int content_index = 0;
+  int output_index = 0;
+  std::string item_id;
+  std::optional<ResponseOutputContent> content_part;
+  std::optional<ResponseReasoningContent> reasoning_part;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseOutputItemAddedEvent {
+  ResponseOutputItem item;
+  std::string item_id;
+  int output_index = 0;
+  int sequence_number = 0;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseOutputItemDoneEvent {
+  ResponseOutputItem item;
+  std::string item_id;
+  int output_index = 0;
+  int sequence_number = 0;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseCreatedEvent {
+  Response response;
+  int sequence_number = 0;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseCompletedEvent {
+  Response response;
+  int sequence_number = 0;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct ResponseStreamEvent {
   enum class Type {
     OutputTextDelta,
     OutputTextDone,
     FunctionCallArgumentsDelta,
     FunctionCallArgumentsDone,
+    Created,
+    Completed,
+    OutputItemAdded,
+    OutputItemDone,
+    ContentPartAdded,
+    ContentPartDone,
+    ReasoningTextDelta,
+    ReasoningTextDone,
     Unknown
   };
 
   Type type = Type::Unknown;
+  int sequence_number = 0;
+  std::string type_name;
   std::optional<ResponseTextDeltaEvent> text_delta;
   std::optional<ResponseTextDoneEvent> text_done;
   std::optional<ResponseFunctionCallArgumentsDeltaEvent> function_arguments_delta;
   std::optional<ResponseFunctionCallArgumentsDoneEvent> function_arguments_done;
+  std::optional<ResponseReasoningTextDeltaEvent> reasoning_text_delta;
+  std::optional<ResponseReasoningTextDoneEvent> reasoning_text_done;
+  std::optional<ResponseOutputItemAddedEvent> output_item_added;
+  std::optional<ResponseOutputItemDoneEvent> output_item_done;
+  std::optional<ResponseContentPartAddedEvent> content_part_added;
+  std::optional<ResponseContentPartDoneEvent> content_part_done;
+  std::optional<ResponseCreatedEvent> created;
+  std::optional<ResponseCompletedEvent> completed;
   std::optional<std::string> event_name;
   nlohmann::json raw = nlohmann::json::object();
 };
@@ -952,6 +1036,7 @@ std::optional<ResponseStreamEvent> parse_response_stream_event(const struct Serv
 class OpenAIClient;
 template <typename Item>
 class CursorPage;
+struct ResponseStreamSnapshot;
 
 class ResponsesResource {
 public:
@@ -1000,10 +1085,19 @@ public:
                      const std::function<bool(const ResponseStreamEvent&)>& on_event,
                      const struct RequestOptions& options) const;
 
+  ResponseStreamSnapshot create_stream_snapshot(const ResponseRequest& request) const;
+  ResponseStreamSnapshot create_stream_snapshot(const ResponseRequest& request,
+                                                const struct RequestOptions& options) const;
+
   std::vector<ServerSentEvent> retrieve_stream(const std::string& response_id) const;
   std::vector<ServerSentEvent> retrieve_stream(const std::string& response_id,
                                                const ResponseRetrieveOptions& retrieve_options,
                                                const struct RequestOptions& options) const;
+
+  ResponseStreamSnapshot retrieve_stream_snapshot(const std::string& response_id) const;
+  ResponseStreamSnapshot retrieve_stream_snapshot(const std::string& response_id,
+                                                  const ResponseRetrieveOptions& retrieve_options,
+                                                  const struct RequestOptions& options) const;
 
   InputItemsResource& input_items() { return input_items_; }
   const InputItemsResource& input_items() const { return input_items_; }
