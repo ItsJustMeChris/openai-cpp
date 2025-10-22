@@ -28,6 +28,7 @@
 #include "openai/logging.hpp"
 #include "openai/utils/base64.hpp"
 #include "openai/utils/platform.hpp"
+#include "openai/utils/qs.hpp"
 #include "openai/utils/uuid.hpp"
 
 namespace openai {
@@ -275,84 +276,6 @@ Completion parse_completion(const json& payload) {
   return completion;
 }
 
-bool is_unreserved(char c) {
-  if (std::isalnum(static_cast<unsigned char>(c))) {
-    return true;
-  }
-  switch (c) {
-    case '-':
-    case '_':
-    case '.':
-    case '~':
-      return true;
-    default:
-      return false;
-  }
-}
-
-std::string url_encode(const std::string& value) {
-  std::ostringstream escaped;
-  escaped.fill('0');
-  escaped << std::hex << std::uppercase;
-
-  for (unsigned char c : value) {
-    if (is_unreserved(static_cast<char>(c))) {
-      escaped << static_cast<char>(c);
-    } else {
-      escaped << '%'
-              << std::setw(2)
-              << std::setfill('0')
-              << static_cast<int>(c);
-    }
-  }
-
-  return escaped.str();
-}
-
-std::string append_query_params(const std::string& url,
-                                const std::map<std::string, std::string>& query_params) {
-  if (query_params.empty()) {
-    return url;
-  }
-
-  std::ostringstream query;
-  bool first = true;
-  for (const auto& [key, value] : query_params) {
-    if (key.empty()) {
-      continue;
-    }
-    if (!first) {
-      query << '&';
-    }
-    query << url_encode(key) << '=';
-    query << url_encode(value);
-    first = false;
-  }
-
-  std::string query_string = query.str();
-  if (query_string.empty()) {
-    return url;
-  }
-
-  std::string result = url;
-  result += (url.find('?') == std::string::npos) ? '?' : '&';
-  result += query_string;
-  return result;
-}
-
-std::map<std::string, std::string> merge_optional_entries(
-    std::map<std::string, std::string> base,
-    const std::map<std::string, std::optional<std::string>>& overrides) {
-  for (const auto& [key, value] : overrides) {
-    if (value.has_value()) {
-      base[key] = *value;
-    } else {
-      base.erase(key);
-    }
-  }
-  return base;
-}
-
 void apply_optional_entries(std::map<std::string, std::string>& target,
                             const std::map<std::string, std::optional<std::string>>& overrides) {
   for (const auto& [key, value] : overrides) {
@@ -362,6 +285,52 @@ void apply_optional_entries(std::map<std::string, std::string>& target,
       target.erase(key);
     }
   }
+}
+
+json build_query_object(const std::map<std::string, std::string>& default_query,
+                        const RequestOptions& options) {
+  json query = json::object();
+  for (const auto& [key, value] : default_query) {
+    query[key] = value;
+  }
+  for (const auto& [key, value] : options.query_params) {
+    if (value.has_value()) {
+      query[key] = *value;
+    } else {
+      query.erase(key);
+    }
+  }
+  if (options.query) {
+    if (!options.query->is_object()) {
+      throw OpenAIError("RequestOptions::query must be a JSON object");
+    }
+    for (const auto& item : options.query->items()) {
+      query[item.key()] = item.value();
+    }
+  }
+  return query;
+}
+
+std::string append_query_string(const std::string& url, const std::string& query_string) {
+  if (query_string.empty()) {
+    return url;
+  }
+  std::string result = url;
+  if (query_string.front() == '?') {
+    if (query_string.size() == 1) {
+      return result;
+    }
+    if (url.find('?') == std::string::npos) {
+      result += query_string;
+    } else {
+      result += '&';
+      result += query_string.substr(1);
+    }
+    return result;
+  }
+  result += (url.find('?') == std::string::npos) ? '?' : '&';
+  result += query_string;
+  return result;
 }
 
 std::vector<float> bytes_to_float32(const std::vector<std::uint8_t>& bytes) {
@@ -589,7 +558,14 @@ OpenAIClient::OpenAIClient(ClientOptions options,
       thread_messages_(*this),
       runs_(*this),
       run_steps_(*this),
-      chat_(*this) {
+      chat_(*this),
+      containers_(*this),
+      videos_(*this),
+      fine_tuning_(*this),
+      webhooks_(*this),
+      conversations_(*this),
+      beta_(*this),
+      batches_(*this) {
   if (options_.api_key.empty()) {
     throw OpenAIError("ClientOptions.api_key must be set");
   }
@@ -625,8 +601,11 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
     HttpRequest http_request;
     http_request.method = method;
     std::string url = build_url(options_.base_url, path);
-    auto merged_query = merge_optional_entries(options_.default_query, options.query_params);
-    url = append_query_params(url, merged_query);
+    json query_json = build_query_object(options_.default_query, options);
+    utils::qs::StringifyOptions qs_options;
+    qs_options.array_format = utils::qs::ArrayFormat::Brackets;
+    std::string query_string = utils::qs::stringify(query_json, qs_options);
+    url = append_query_string(url, query_string);
     http_request.url = std::move(url);
     http_request.body = body;
     http_request.timeout = options.timeout.value_or(options_.timeout);
@@ -739,9 +718,7 @@ HttpResponse OpenAIClient::perform_request(const PageRequestOptions& options) co
   for (const auto& [key, value] : options.headers) {
     request_options.headers[key] = value;
   }
-  for (const auto& [key, value] : options.query) {
-    request_options.query_params[key] = value;
-  }
+  request_options.query = options.query;
   return perform_request(options.method, options.path, options.body, request_options);
 }
 

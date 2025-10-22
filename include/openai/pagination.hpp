@@ -84,11 +84,19 @@ inline std::map<std::string, std::string> materialize_headers(const RequestOptio
   return headers;
 }
 
-inline std::map<std::string, std::string> materialize_query(const RequestOptions& options) {
-  std::map<std::string, std::string> query;
+inline nlohmann::json materialize_query(const RequestOptions& options) {
+  nlohmann::json query = nlohmann::json::object();
   for (const auto& [key, value] : options.query_params) {
     if (value.has_value()) {
       query[key] = *value;
+    }
+  }
+  if (options.query) {
+    if (!options.query->is_object()) {
+      throw OpenAIError("RequestOptions::query must be a JSON object");
+    }
+    for (const auto& item : options.query->items()) {
+      query[item.key()] = item.value();
     }
   }
   return query;
@@ -99,9 +107,7 @@ inline RequestOptions to_request_options(const PageRequestOptions& page_options)
   for (const auto& [key, value] : page_options.headers) {
     options.headers[key] = value;
   }
-  for (const auto& [key, value] : page_options.query) {
-    options.query_params[key] = value;
-  }
+  options.query = page_options.query;
   return options;
 }
 

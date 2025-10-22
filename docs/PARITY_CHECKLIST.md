@@ -15,7 +15,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Logging hooks and middleware support
 
 ## Internal Utilities
-- [ ] Query string builder (`internal/qs`)
+- [x] Query string builder (`internal/qs`)
 - [ ] Env/platform shims (`internal/shims`, `detect-platform`)
 - [ ] Value validators (`validatePositiveInteger`, `isAbsoluteURL`, etc.)
 - [ ] Sleep/backoff utilities
@@ -42,7 +42,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Audio transcriptions (create)
 - [x] Audio translations (create)
 - [x] Audio speech (create)
-- [ ] Batches
+- [x] Batches
 - [x] Vector stores (basic CRUD)
 - [x] Vector store files/batches/search
 - [x] Assistants (beta create/retrieve/update/list/delete)
@@ -54,12 +54,12 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Run streaming & polling helpers (`create_stream`, `stream`, `submit_tool_outputs_stream`, `poll`, `create_and_run_poll`)
 - [x] Thread create-and-run helpers (stream/poll)
 - [x] Assistants tool runner actions & automation helpers
-- [ ] Fine-tuning
-- [ ] Moderations
-- [ ] Conversations
-- [ ] Containers
-- [ ] Videos
-- [ ] Webhooks
+- [x] Fine-tuning
+- [x] Moderations
+- [x] Conversations
+- [x] Containers
+- [x] Videos
+- [x] Webhooks
 - [ ] Beta features (`beta`, `graders`, `realtime`, etc.)
 - [ ] Azure OpenAI compatibility layer
 

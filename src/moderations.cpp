@@ -19,7 +19,11 @@ json moderation_multi_modal_to_json(const ModerationMultiModalInput& input) {
         json obj = json::object();
         obj["type"] = item.type;
         if constexpr (std::is_same_v<std::decay_t<decltype(item)>, ModerationImageInput>) {
-          obj["image_url"] = json::object({{"url", item.image_url.url}});
+          json image = json::object({{"url", item.image_url.url}});
+          if (item.image_url.detail) {
+            image["detail"] = *item.image_url.detail;
+          }
+          obj["image_url"] = std::move(image);
         } else if constexpr (std::is_same_v<std::decay_t<decltype(item)>, ModerationTextInput>) {
           obj["text"] = item.text;
         }

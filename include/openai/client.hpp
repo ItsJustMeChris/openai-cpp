@@ -23,18 +23,26 @@
 #include "openai/files.hpp"
 #include "openai/images.hpp"
 #include "openai/audio.hpp"
+#include "openai/containers.hpp"
+#include "openai/videos.hpp"
 #include "openai/vector_stores.hpp"
+#include "openai/fine_tuning.hpp"
+#include "openai/webhooks.hpp"
+#include "openai/conversations.hpp"
+#include "openai/beta.hpp"
 #include "openai/assistants.hpp"
 #include "openai/threads.hpp"
 #include "openai/messages.hpp"
 #include "openai/runs.hpp"
 #include "openai/run_steps.hpp"
+#include "openai/batches.hpp"
 
 namespace openai {
 
 struct RequestOptions {
   std::map<std::string, std::optional<std::string>> headers;
   std::map<std::string, std::optional<std::string>> query_params;
+  std::optional<nlohmann::json> query;
   std::optional<std::string> idempotency_key;
   std::optional<std::chrono::milliseconds> timeout;
   std::optional<std::size_t> max_retries;
@@ -46,7 +54,7 @@ struct PageRequestOptions {
   std::string method;
   std::string path;
   std::map<std::string, std::string> headers;
-  std::map<std::string, std::string> query;
+  nlohmann::json query = nlohmann::json::object();
   std::string body;
 };
 
@@ -59,6 +67,7 @@ struct ClientOptions {
   std::size_t max_retries = 2;
   std::map<std::string, std::string> default_headers;
   std::map<std::string, std::string> default_query;
+  std::optional<std::string> webhook_secret;
   LogLevel log_level = LogLevel::Off;
   LoggerCallback logger;
 };
@@ -165,6 +174,27 @@ public:
   ChatResource& chat() { return chat_; }
   const ChatResource& chat() const { return chat_; }
 
+  ContainersResource& containers() { return containers_; }
+  const ContainersResource& containers() const { return containers_; }
+
+  VideosResource& videos() { return videos_; }
+  const VideosResource& videos() const { return videos_; }
+
+  FineTuningResource& fine_tuning() { return fine_tuning_; }
+  const FineTuningResource& fine_tuning() const { return fine_tuning_; }
+
+  WebhooksResource& webhooks() { return webhooks_; }
+  const WebhooksResource& webhooks() const { return webhooks_; }
+
+  ConversationsResource& conversations() { return conversations_; }
+  const ConversationsResource& conversations() const { return conversations_; }
+
+  BetaResource& beta() { return beta_; }
+  const BetaResource& beta() const { return beta_; }
+
+  BatchesResource& batches() { return batches_; }
+  const BatchesResource& batches() const { return batches_; }
+
   Completion create_completion(const CompletionRequest& request,
                                const RequestOptions& options = {});
 
@@ -186,6 +216,19 @@ private:
   friend class RunsResource;
   friend class RunStepsResource;
   friend class ChatCompletionsResource;
+  friend class ContainersResource;
+  friend class ContainerFilesResource;
+  friend class ContainerFilesContentResource;
+  friend class VideosResource;
+  friend class FineTuningJobsResource;
+  friend class FineTuningJobCheckpointsResource;
+  friend class FineTuningResource;
+  friend class WebhooksResource;
+  friend class ConversationsResource;
+  friend class ConversationItemsResource;
+  friend class BetaResource;
+  friend class beta::RealtimeSessionsResource;
+  friend class BatchesResource;
 
   HttpResponse perform_request(const std::string& method,
                                const std::string& path,
@@ -213,6 +256,13 @@ private:
   RunsResource runs_;
   RunStepsResource run_steps_;
   ChatResource chat_;
+  ContainersResource containers_;
+  VideosResource videos_;
+  FineTuningResource fine_tuning_;
+  WebhooksResource webhooks_;
+  ConversationsResource conversations_;
+  BetaResource beta_;
+  BatchesResource batches_;
 };
 
 }  // namespace openai

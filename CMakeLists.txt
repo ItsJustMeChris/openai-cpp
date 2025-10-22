@@ -16,6 +16,7 @@ add_library(openai-cpp
     src/utils/multipart.cpp
     src/utils/uuid.cpp
     src/utils/platform.cpp
+    src/utils/qs.cpp
     src/logging.cpp
     src/chat.cpp
     src/moderations.cpp
@@ -23,7 +24,14 @@ add_library(openai-cpp
     src/files.cpp
     src/images.cpp
     src/audio.cpp
+    src/containers.cpp
+    src/videos.cpp
+    src/fine_tuning.cpp
+    src/webhooks.cpp
+    src/conversations.cpp
+    src/beta.cpp
     src/vector_stores.cpp
+    src/batches.cpp
     src/assistants.cpp
     src/threads.cpp
     src/messages.cpp

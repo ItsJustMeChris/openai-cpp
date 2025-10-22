@@ -67,6 +67,7 @@ struct Moderation {
 
 struct ModerationImageURL {
   std::string url;
+  std::optional<std::string> detail;
 };
 
 struct ModerationImageInput {
@@ -82,7 +83,9 @@ struct ModerationTextInput {
 using ModerationMultiModalInput = std::variant<ModerationImageInput, ModerationTextInput>;
 
 struct ModerationRequest {
-  using Input = std::variant<std::string, std::vector<std::string>, std::vector<ModerationMultiModalInput>>;
+  using Input = std::variant<std::string,
+                             std::vector<std::string>,
+                             std::vector<ModerationMultiModalInput>>;
 
   Input input;
   std::optional<std::string> model;
