@@ -1,6 +1,7 @@
 #include "openai/http_client.hpp"
 
 #include "openai/error.hpp"
+#include "openai/utils/platform.hpp"
 
 #include <curl/curl.h>
 
@@ -100,7 +101,8 @@ public:
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, &response_headers);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(request.timeout.count()));
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "openai-cpp/0.1");
+    const std::string& user_agent = utils::user_agent();
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
 
     if (!request.body.empty()) {
       curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request.body.c_str());

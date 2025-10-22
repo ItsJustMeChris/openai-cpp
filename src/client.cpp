@@ -15,6 +15,7 @@
 #include <cctype>
 
 #include "openai/utils/base64.hpp"
+#include "openai/utils/platform.hpp"
 
 namespace openai {
 namespace {
@@ -341,6 +342,10 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
     http_request.headers["Content-Type"] = "application/json";
   }
   http_request.headers["Accept"] = "application/json";
+  http_request.headers["User-Agent"] = utils::user_agent();
+  for (const auto& [key, value] : utils::platform_headers()) {
+    http_request.headers[key] = value;
+  }
   http_request.headers["Authorization"] = std::string("Bearer ") + options_.api_key;
 
   if (options_.organization) {

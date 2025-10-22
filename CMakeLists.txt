@@ -13,6 +13,7 @@ add_library(openai-cpp
     src/client.cpp
     src/http_client.cpp
     src/utils/base64.cpp
+    src/utils/platform.cpp
     src/chat.cpp
     src/moderations.cpp
     src/responses.cpp
@@ -40,6 +41,8 @@ target_include_directories(openai-cpp
 target_link_libraries(openai-cpp PRIVATE CURL::libcurl)
 
 target_compile_features(openai-cpp PUBLIC cxx_std_17)
+
+target_compile_definitions(openai-cpp PUBLIC OPENAI_CPP_VERSION=\"${PROJECT_VERSION}\")
 
 add_library(openai::openai ALIAS openai-cpp)
 
