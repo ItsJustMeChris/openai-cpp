@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -25,6 +26,28 @@ private:
 
   std::string buffer_;
   ServerSentEvent current_;
+};
+
+class SSEEventStream {
+public:
+  using EventHandler = std::function<bool(const ServerSentEvent&)>;
+
+  explicit SSEEventStream(EventHandler handler = nullptr);
+
+  void feed(const char* data, std::size_t size);
+  void finalize();
+  void stop();
+
+  [[nodiscard]] bool stopped() const { return stopped_; }
+  [[nodiscard]] const std::vector<ServerSentEvent>& events() const { return events_; }
+
+private:
+  void dispatch_events(std::vector<ServerSentEvent>&& events);
+
+  SSEParser parser_;
+  EventHandler handler_;
+  std::vector<ServerSentEvent> events_;
+  bool stopped_ = false;
 };
 
 }  // namespace openai

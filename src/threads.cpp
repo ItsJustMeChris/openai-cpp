@@ -336,13 +336,13 @@ AssistantStreamSnapshot ThreadsResource::create_and_run_stream_snapshot(const Th
     request_options.query_params["include"] = std::move(joined);
   }
 
-  SSEParser sse_parser;
   AssistantStreamSnapshot snapshot;
   AssistantStreamParser parser([&](const AssistantStreamEvent& ev) { snapshot.ingest(ev); });
-  request_options.on_chunk = [&](const char* data, std::size_t size) {
-    auto sse_events = sse_parser.feed(data, size);
-    for (const auto& sse_event : sse_events) parser.feed(sse_event);
-  };
+  SSEEventStream stream([&](const ServerSentEvent& sse_event) {
+    parser.feed(sse_event);
+    return true;
+  });
+  request_options.on_chunk = [&](const char* data, std::size_t size) { stream.feed(data, size); };
 
   json body;
   if (streaming_request.thread) {
@@ -355,8 +355,7 @@ AssistantStreamSnapshot ThreadsResource::create_and_run_stream_snapshot(const Th
 
   client_.perform_request("POST", std::string(kThreadsPath) + "/runs", body.dump(), request_options);
 
-  auto remaining = sse_parser.finalize();
-  for (const auto& sse_event : remaining) parser.feed(sse_event);
+  stream.finalize();
 
   return snapshot;
 }

@@ -91,4 +91,36 @@ std::vector<ServerSentEvent> parse_sse_stream(const std::string& payload) {
   return events;
 }
 
+SSEEventStream::SSEEventStream(EventHandler handler) : handler_(std::move(handler)) {}
+
+void SSEEventStream::feed(const char* data, std::size_t size) {
+  if (stopped_) return;
+  auto events = parser_.feed(data, size);
+  dispatch_events(std::move(events));
+}
+
+void SSEEventStream::finalize() {
+  if (stopped_) return;
+  auto events = parser_.finalize();
+  dispatch_events(std::move(events));
+}
+
+void SSEEventStream::stop() {
+  stopped_ = true;
+}
+
+void SSEEventStream::dispatch_events(std::vector<ServerSentEvent>&& events) {
+  if (events.empty()) return;
+  for (const auto& event : events) {
+    if (stopped_) break;
+    events_.push_back(event);
+    if (handler_) {
+      const bool should_continue = handler_(event);
+      if (!should_continue) {
+        stopped_ = true;
+      }
+    }
+  }
+}
+
 }  // namespace openai

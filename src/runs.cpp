@@ -546,16 +546,14 @@ AssistantStreamSnapshot RunsResource::create_stream_snapshot(const std::string& 
   RunCreateRequest streaming_request = request;
   streaming_request.stream = true;
 
-  SSEParser sse_parser;
   AssistantStreamSnapshot snapshot;
   AssistantStreamParser parser([&](const AssistantStreamEvent& ev) { snapshot.ingest(ev); });
+  SSEEventStream stream([&](const ServerSentEvent& sse_event) {
+    parser.feed(sse_event);
+    return true;
+  });
 
-  request_options.on_chunk = [&](const char* data, std::size_t size) {
-    auto sse_events = sse_parser.feed(data, size);
-    for (const auto& sse_event : sse_events) {
-      parser.feed(sse_event);
-    }
-  };
+  request_options.on_chunk = [&](const char* data, std::size_t size) { stream.feed(data, size); };
 
   if (streaming_request.include && !streaming_request.include->empty()) {
     std::string joined;
@@ -569,10 +567,7 @@ AssistantStreamSnapshot RunsResource::create_stream_snapshot(const std::string& 
   const auto body = build_run_create_body(streaming_request);
   client_.perform_request("POST", runs_path(thread_id), body.dump(), request_options);
 
-  auto remaining = sse_parser.finalize();
-  for (const auto& sse_event : remaining) {
-    parser.feed(sse_event);
-  }
+  stream.finalize();
 
   return snapshot;
 }
@@ -621,24 +616,19 @@ AssistantStreamSnapshot RunsResource::submit_tool_outputs_stream_snapshot(
   RunSubmitToolOutputsRequest streaming_request = request;
   streaming_request.stream = true;
 
-  SSEParser sse_parser;
   AssistantStreamSnapshot snapshot;
   AssistantStreamParser parser([&](const AssistantStreamEvent& ev) { snapshot.ingest(ev); });
+  SSEEventStream stream([&](const ServerSentEvent& sse_event) {
+    parser.feed(sse_event);
+    return true;
+  });
 
-  request_options.on_chunk = [&](const char* data, std::size_t size) {
-    auto sse_events = sse_parser.feed(data, size);
-    for (const auto& sse_event : sse_events) {
-      parser.feed(sse_event);
-    }
-  };
+  request_options.on_chunk = [&](const char* data, std::size_t size) { stream.feed(data, size); };
 
   const auto body = submit_tool_outputs_to_json(streaming_request);
   client_.perform_request("POST", runs_path(thread_id) + "/" + run_id + "/submit_tool_outputs", body.dump(), request_options);
 
-  auto remaining = sse_parser.finalize();
-  for (const auto& sse_event : remaining) {
-    parser.feed(sse_event);
-  }
+  stream.finalize();
 
   return snapshot;
 }

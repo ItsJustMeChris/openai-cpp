@@ -8,7 +8,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Retry and backoff policy parity (`maxRetries`, retry-after handling)
 - [x] Request option merging (`RequestOptions`, idempotency, query parameters) – headers/query support implemented
 - [x] Platform detection + header helpers (User-Agent parity)
-- [ ] Streaming helpers (Server-Sent Events, chunk decoding)
+- [x] Streaming helpers (Server-Sent Events, chunk decoding)
 - [ ] Pagination abstractions (`AbstractPage`, cursor/page responses)
 - [ ] Multipart uploads (`Uploads` helper, file chunking strategies)
 - [ ] Error hierarchy mirroring `core/error.ts`

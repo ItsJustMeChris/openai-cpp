@@ -378,18 +378,15 @@ std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCo
   request_options.headers["Accept"] = "text/event-stream";
   request_options.collect_body = false;
 
-  SSEParser parser;
-  std::vector<ServerSentEvent> events;
+  SSEEventStream stream;
   request_options.on_chunk = [&](const char* data, std::size_t size) {
-    auto chunk_events = parser.feed(data, size);
-    events.insert(events.end(), chunk_events.begin(), chunk_events.end());
+    stream.feed(data, size);
   };
 
   client_.perform_request("POST", "/chat/completions", body.dump(), request_options);
 
-  auto remaining = parser.finalize();
-  events.insert(events.end(), remaining.begin(), remaining.end());
-  return events;
+  stream.finalize();
+  return stream.events();
 }
 
 std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCompletionRequest& request) const {

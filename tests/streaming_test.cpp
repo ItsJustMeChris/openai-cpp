@@ -38,3 +38,39 @@ TEST(StreamingTest, IncrementalFeed) {
   EXPECT_FALSE(events[0].event.has_value());
   EXPECT_EQ(events[0].data, "partial");
 }
+
+TEST(StreamingEventStreamTest, DispatchesEventsAndCollectsHistory) {
+  openai::SSEEventStream stream;
+  stream.feed("data: one\n\n", std::strlen("data: one\n\n"));
+  stream.feed("event: note\n", std::strlen("event: note\n"));
+  stream.feed("data: two\n\n", std::strlen("data: two\n\n"));
+  stream.finalize();
+
+  const auto& events = stream.events();
+  ASSERT_EQ(events.size(), 2u);
+  EXPECT_FALSE(events[0].event.has_value());
+  EXPECT_EQ(events[0].data, "one");
+  ASSERT_TRUE(events[1].event.has_value());
+  EXPECT_EQ(*events[1].event, "note");
+  EXPECT_EQ(events[1].data, "two");
+}
+
+TEST(StreamingEventStreamTest, HandlerCanStopStream) {
+  int handled = 0;
+  openai::SSEEventStream stream([&handled](const openai::ServerSentEvent& event) {
+    ++handled;
+    return event.data != "stop";
+  });
+
+  stream.feed("data: keep\n\n", std::strlen("data: keep\n\n"));
+  stream.feed("data: stop\n\n", std::strlen("data: stop\n\n"));
+  stream.feed("data: ignored\n\n", std::strlen("data: ignored\n\n"));
+  stream.finalize();
+
+  EXPECT_TRUE(stream.stopped());
+  EXPECT_EQ(handled, 2);
+  const auto& events = stream.events();
+  ASSERT_EQ(events.size(), 2u);
+  EXPECT_EQ(events[0].data, "keep");
+  EXPECT_EQ(events[1].data, "stop");
+}
