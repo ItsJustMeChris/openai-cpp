@@ -2,10 +2,12 @@
 
 #include "openai/client.hpp"
 #include "openai/error.hpp"
+#include "openai/pagination.hpp"
 
 #include <nlohmann/json.hpp>
 
 #include <fstream>
+#include <memory>
 #include <sstream>
 
 namespace openai {
@@ -98,14 +100,54 @@ FileList parse_file_list(const json& payload) {
 
 }  // namespace
 
+CursorPage<FileObject> FilesResource::list_page(const RequestOptions& options) const {
+  auto fetch_impl = std::make_shared<std::function<CursorPage<FileObject>(const PageRequestOptions&)>>();
+
+  *fetch_impl = [this, fetch_impl](const PageRequestOptions& request_options) -> CursorPage<FileObject> {
+    RequestOptions next_options = to_request_options(request_options);
+    auto response = client_.perform_request(request_options.method, request_options.path, request_options.body, next_options);
+    try {
+      auto payload = json::parse(response.body);
+      auto list = parse_file_list(payload);
+      std::optional<std::string> cursor = list.next_cursor;
+      if (!cursor && !list.data.empty()) {
+        cursor = list.data.back().id;
+      }
+
+      return CursorPage<FileObject>(
+          std::move(list.data),
+          list.has_more,
+          std::move(cursor),
+          request_options,
+          *fetch_impl,
+          "after",
+          std::move(list.raw));
+    } catch (const json::exception& ex) {
+      throw OpenAIError(std::string("Failed to parse file list: ") + ex.what());
+    }
+  };
+
+  PageRequestOptions initial;
+  initial.method = "GET";
+  initial.path = kFilesPath;
+  initial.headers = materialize_headers(options);
+  initial.query = materialize_query(options);
+
+  return (*fetch_impl)(initial);
+}
+
+CursorPage<FileObject> FilesResource::list_page() const {
+  return list_page(RequestOptions{});
+}
+
 FileList FilesResource::list(const RequestOptions& options) const {
-  auto response = client_.perform_request("GET", kFilesPath, "", options);
-  try {
-    auto payload = json::parse(response.body);
-    return parse_file_list(payload);
-  } catch (const json::exception& ex) {
-    throw OpenAIError(std::string("Failed to parse file list: ") + ex.what());
-  }
+  auto page = list_page(options);
+  FileList list;
+  list.data = page.data();
+  list.has_more = page.has_next_page();
+  list.next_cursor = page.next_cursor();
+  list.raw = page.raw();
+  return list;
 }
 
 FileList FilesResource::list() const {

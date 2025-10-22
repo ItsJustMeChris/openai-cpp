@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "openai/client.hpp"
+#include "openai/pagination.hpp"
 #include "openai/responses.hpp"
 #include "support/mock_http_client.hpp"
 
@@ -597,4 +598,53 @@ TEST(ResponsesStreamEventTest, ParsesFunctionArgumentsDoneEvent) {
   ASSERT_TRUE(parsed->function_arguments_done.has_value());
   EXPECT_EQ(parsed->function_arguments_done->name, "weather");
   EXPECT_EQ(parsed->function_arguments_done->sequence_number, 5);
+}
+
+TEST(ResponsesResourceTest, ListPageSupportsCursorPagination) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string first_body = R"({
+    "data": [
+      { "id": "resp_1", "object": "response", "created": 1, "model": "gpt" }
+    ],
+    "has_more": true,
+    "last_id": "resp_1"
+  })";
+
+  const std::string second_body = R"({
+    "data": [
+      { "id": "resp_2", "object": "response", "created": 2, "model": "gpt" }
+    ],
+    "has_more": false,
+    "last_id": "resp_2"
+  })";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, first_body});
+  mock_ptr->enqueue_response(HttpResponse{200, {}, second_body});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+  auto page = client.responses().list_page();
+
+  EXPECT_EQ(mock_ptr->call_count(), 1u);
+  EXPECT_TRUE(page.has_next_page());
+  ASSERT_TRUE(page.next_cursor().has_value());
+  EXPECT_EQ(*page.next_cursor(), "resp_1");
+  ASSERT_EQ(page.data().size(), 1u);
+  EXPECT_EQ(page.data().front().id, "resp_1");
+
+  auto next_page = page.next_page();
+  EXPECT_EQ(mock_ptr->call_count(), 2u);
+  EXPECT_FALSE(next_page.has_next_page());
+  ASSERT_EQ(next_page.data().size(), 1u);
+  EXPECT_EQ(next_page.data().front().id, "resp_2");
+
+  const auto& last_request = mock_ptr->last_request();
+  ASSERT_TRUE(last_request.has_value());
+  EXPECT_NE(last_request->url.find("after=resp_1"), std::string::npos);
 }

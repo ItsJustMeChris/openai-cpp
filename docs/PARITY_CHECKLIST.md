@@ -9,7 +9,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Request option merging (`RequestOptions`, idempotency, query parameters) – headers/query support implemented
 - [x] Platform detection + header helpers (User-Agent parity)
 - [x] Streaming helpers (Server-Sent Events, chunk decoding)
-- [ ] Pagination abstractions (`AbstractPage`, cursor/page responses)
+- [x] Pagination abstractions (`AbstractPage`, cursor/page responses)
 - [ ] Multipart uploads (`Uploads` helper, file chunking strategies)
 - [ ] Error hierarchy mirroring `core/error.ts`
 - [ ] Logging hooks and middleware support

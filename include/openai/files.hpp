@@ -50,6 +50,8 @@ struct FileUploadRequest {
 };
 
 struct RequestOptions;
+template <typename Item>
+class CursorPage;
 
 class OpenAIClient;
 
@@ -59,6 +61,8 @@ public:
 
   FileList list() const;
   FileList list(const RequestOptions& options) const;
+  CursorPage<FileObject> list_page() const;
+  CursorPage<FileObject> list_page(const RequestOptions& options) const;
 
   FileObject retrieve(const std::string& file_id) const;
   FileObject retrieve(const std::string& file_id, const RequestOptions& options) const;

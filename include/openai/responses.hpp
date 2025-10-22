@@ -862,6 +862,7 @@ struct ResponseRetrieveOptions {
 struct ResponseList {
   std::vector<Response> data;
   bool has_more = false;
+  std::optional<std::string> last_id;
   nlohmann::json raw = nlohmann::json::object();
 };
 
@@ -922,6 +923,8 @@ struct ResponseStreamEvent {
 std::optional<ResponseStreamEvent> parse_response_stream_event(const struct ServerSentEvent& event);
 
 class OpenAIClient;
+template <typename Item>
+class CursorPage;
 
 class ResponsesResource {
 public:
@@ -943,6 +946,8 @@ public:
 
   ResponseList list() const;
   ResponseList list(const struct RequestOptions& options) const;
+  CursorPage<Response> list_page() const;
+  CursorPage<Response> list_page(const struct RequestOptions& options) const;
 
   std::vector<ServerSentEvent> create_stream(const ResponseRequest& request) const;
   std::vector<ServerSentEvent> create_stream(const ResponseRequest& request,

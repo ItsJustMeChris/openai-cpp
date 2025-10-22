@@ -2,10 +2,12 @@
 
 #include "openai/client.hpp"
 #include "openai/error.hpp"
+#include "openai/pagination.hpp"
 #include "openai/streaming.hpp"
 
 #include <nlohmann/json.hpp>
 
+#include <memory>
 #include <sstream>
 #include <utility>
 
@@ -2072,6 +2074,9 @@ ResponseList parse_response_list(const json& payload) {
     }
   }
   list.has_more = payload.value("has_more", false);
+  if (payload.contains("last_id") && payload.at("last_id").is_string()) {
+    list.last_id = payload.at("last_id").get<std::string>();
+  }
   return list;
 }
 
@@ -2086,6 +2091,46 @@ std::string build_response_path(const std::string& response_id) {
 }
 
 }  // namespace
+
+CursorPage<Response> ResponsesResource::list_page(const RequestOptions& options) const {
+  auto fetch_impl = std::make_shared<std::function<CursorPage<Response>(const PageRequestOptions&)>>();
+
+  *fetch_impl = [this, fetch_impl](const PageRequestOptions& request_options) -> CursorPage<Response> {
+    RequestOptions next_options = to_request_options(request_options);
+    auto response = client_.perform_request(request_options.method, request_options.path, request_options.body, next_options);
+    try {
+      auto payload = json::parse(response.body);
+      auto list = parse_response_list(payload);
+      std::optional<std::string> cursor = list.last_id;
+      if (!cursor && !list.data.empty()) {
+        cursor = list.data.back().id;
+      }
+
+      return CursorPage<Response>(
+          std::move(list.data),
+          list.has_more,
+          std::move(cursor),
+          request_options,
+          *fetch_impl,
+          "after",
+          std::move(list.raw));
+    } catch (const json::exception& ex) {
+      throw OpenAIError(std::string("Failed to parse responses list: ") + ex.what());
+    }
+  };
+
+  PageRequestOptions initial;
+  initial.method = "GET";
+  initial.path = kResponseEndpoint;
+  initial.headers = materialize_headers(options);
+  initial.query = materialize_query(options);
+
+  return (*fetch_impl)(initial);
+}
+
+CursorPage<Response> ResponsesResource::list_page() const {
+  return list_page(RequestOptions{});
+}
 
 std::optional<ResponseStreamEvent> parse_response_stream_event(const ServerSentEvent& event) {
   return parse_response_stream_event_internal(event);
@@ -2150,13 +2195,13 @@ Response ResponsesResource::cancel(const std::string& response_id) const {
 }
 
 ResponseList ResponsesResource::list(const RequestOptions& options) const {
-  auto response = client_.perform_request("GET", kResponseEndpoint, "", options);
-  try {
-    auto payload = json::parse(response.body);
-    return parse_response_list(payload);
-  } catch (const json::exception& ex) {
-    throw OpenAIError(std::string("Failed to parse responses list: ") + ex.what());
-  }
+  auto page = list_page(options);
+  ResponseList list;
+  list.data = page.data();
+  list.has_more = page.has_next_page();
+  list.last_id = page.next_cursor();
+  list.raw = page.raw();
+  return list;
 }
 
 ResponseList ResponsesResource::list() const {
