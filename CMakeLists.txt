@@ -43,6 +43,7 @@ add_library(openai-cpp
     src/run_steps.cpp
     src/runs.cpp
     src/streaming.cpp
+    src/uploads.cpp
 )
 
 target_include_directories(openai-cpp

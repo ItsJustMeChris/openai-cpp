@@ -26,7 +26,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] `client.completions().create`
 - [ ] Other core resource registration (lazy instantiation, type-safe surfaces)
 - [ ] Streaming return types (`APIPromise`, `Stream` equivalents)
-- [ ] Upload helpers and binary response support
+- [x] Upload helpers and binary response support
 
 ## REST Resources
 - [x] Completions (`/completions`)

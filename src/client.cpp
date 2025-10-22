@@ -538,7 +538,8 @@ OpenAIClient::OpenAIClient(ClientOptions options,
       webhooks_(*this),
       conversations_(*this),
       beta_(*this),
-      batches_(*this) {
+      batches_(*this),
+      uploads_(*this) {
   if (options_.api_key.empty()) {
     if (auto env_api = utils::read_env("OPENAI_API_KEY")) {
       options_.api_key = *env_api;

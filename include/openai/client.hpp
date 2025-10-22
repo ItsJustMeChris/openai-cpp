@@ -36,6 +36,7 @@
 #include "openai/runs.hpp"
 #include "openai/run_steps.hpp"
 #include "openai/batches.hpp"
+#include "openai/uploads.hpp"
 
 namespace openai {
 
@@ -171,6 +172,9 @@ public:
   RunStepsResource& run_steps() { return run_steps_; }
   const RunStepsResource& run_steps() const { return run_steps_; }
 
+  UploadsResource& uploads() { return uploads_; }
+  const UploadsResource& uploads() const { return uploads_; }
+
   ChatResource& chat() { return chat_; }
   const ChatResource& chat() const { return chat_; }
 
@@ -229,6 +233,8 @@ private:
   friend class BetaResource;
   friend class beta::RealtimeSessionsResource;
   friend class BatchesResource;
+  friend class UploadsResource;
+  friend class UploadPartsResource;
 
   HttpResponse perform_request(const std::string& method,
                                const std::string& path,
@@ -263,6 +269,7 @@ private:
   ConversationsResource conversations_;
   BetaResource beta_;
   BatchesResource batches_;
+  UploadsResource uploads_;
 };
 
 }  // namespace openai
