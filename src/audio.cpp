@@ -5,7 +5,6 @@
 
 #include <nlohmann/json.hpp>
 
-#include <fstream>
 #include <sstream>
 
 namespace openai {
@@ -18,14 +17,6 @@ constexpr const char* kAudioTranslations = "/audio/translations";
 constexpr const char* kAudioSpeech = "/audio/speech";
 constexpr const char* kBoundary = "----openai-cpp-audio-boundary";
 
-std::string load_file(const std::string& path) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file) {
-    throw OpenAIError("Failed to open file: " + path);
-  }
-  return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-}
-
 void append_field(std::ostringstream& body, const std::string& name, const std::string& value) {
   body << "--" << kBoundary << "\r\n";
   body << "Content-Disposition: form-data; name=\"" << name << "\"\r\n\r\n";
@@ -34,14 +25,12 @@ void append_field(std::ostringstream& body, const std::string& name, const std::
 
 std::string build_transcription_multipart(const TranscriptionRequest& request) {
   std::ostringstream body;
-  const auto file_content = load_file(request.file.file_path);
-  const std::string filename = request.file.file_name.value_or("audio.wav");
-  const std::string content_type = request.file.content_type.value_or("application/octet-stream");
+  auto upload = request.file.materialize("audio.wav");
 
   body << "--" << kBoundary << "\r\n";
-  body << "Content-Disposition: form-data; name=\"file\"; filename=\"" << filename << "\"\r\n";
-  body << "Content-Type: " << content_type << "\r\n\r\n";
-  body.write(file_content.data(), static_cast<std::streamsize>(file_content.size()));
+  body << "Content-Disposition: form-data; name=\"file\"; filename=\"" << upload.filename << "\"\r\n";
+  body << "Content-Type: " << *upload.content_type << "\r\n\r\n";
+  body.write(reinterpret_cast<const char*>(upload.data.data()), static_cast<std::streamsize>(upload.data.size()));
   body << "\r\n";
 
   append_field(body, "model", request.model);
@@ -66,14 +55,12 @@ std::string build_transcription_multipart(const TranscriptionRequest& request) {
 
 std::string build_translation_multipart(const TranslationRequest& request) {
   std::ostringstream body;
-  const auto file_content = load_file(request.file.file_path);
-  const std::string filename = request.file.file_name.value_or("audio.wav");
-  const std::string content_type = request.file.content_type.value_or("application/octet-stream");
+  auto upload = request.file.materialize("audio.wav");
 
   body << "--" << kBoundary << "\r\n";
-  body << "Content-Disposition: form-data; name=\"file\"; filename=\"" << filename << "\"\r\n";
-  body << "Content-Type: " << content_type << "\r\n\r\n";
-  body.write(file_content.data(), static_cast<std::streamsize>(file_content.size()));
+  body << "Content-Disposition: form-data; name=\"file\"; filename=\"" << upload.filename << "\"\r\n";
+  body << "Content-Type: " << *upload.content_type << "\r\n\r\n";
+  body.write(reinterpret_cast<const char*>(upload.data.data()), static_cast<std::streamsize>(upload.data.size()));
   body << "\r\n";
 
   append_field(body, "model", request.model);
@@ -168,4 +155,3 @@ SpeechResponse AudioSpeechResource::create(const SpeechRequest& request) const {
 }
 
 }  // namespace openai
-

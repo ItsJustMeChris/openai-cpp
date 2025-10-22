@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -135,6 +136,11 @@ public:
   std::vector<ServerSentEvent> create_stream(const ChatCompletionRequest& request) const;
   std::vector<ServerSentEvent> create_stream(const ChatCompletionRequest& request,
                                              const struct RequestOptions& options) const;
+  void create_stream(const ChatCompletionRequest& request,
+                     const std::function<bool(const ServerSentEvent&)>& on_event) const;
+  void create_stream(const ChatCompletionRequest& request,
+                     const std::function<bool(const ServerSentEvent&)>& on_event,
+                     const struct RequestOptions& options) const;
 
 private:
   OpenAIClient& client_;
@@ -153,4 +159,3 @@ private:
 };
 
 }  // namespace openai
-

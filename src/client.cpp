@@ -13,7 +13,6 @@
 #include <sstream>
 #include <iomanip>
 #include <cctype>
-#include <thread>
 #include <random>
 #include <array>
 #include <algorithm>
@@ -27,18 +26,20 @@
 
 #include "openai/logging.hpp"
 #include "openai/utils/base64.hpp"
+#include "openai/utils/env.hpp"
 #include "openai/utils/platform.hpp"
 #include "openai/utils/qs.hpp"
+#include "openai/utils/time.hpp"
 #include "openai/utils/uuid.hpp"
+#include "openai/utils/values.hpp"
 
 namespace openai {
 namespace {
 
 using json = nlohmann::json;
 
-constexpr double kInitialRetryDelaySeconds = 0.5;
-constexpr double kMaxRetryDelaySeconds = 8.0;
 constexpr std::chrono::milliseconds kMaxRetryAfter = std::chrono::milliseconds(60'000);
+constexpr const char* kDefaultBaseUrl = "https://api.openai.com/v1";
 
 bool iequals(std::string_view lhs, std::string_view rhs) {
   return lhs.size() == rhs.size() &&
@@ -55,28 +56,6 @@ std::optional<std::string> get_header_value(const std::map<std::string, std::str
     }
   }
   return std::nullopt;
-}
-
-double random_jitter_factor() {
-  thread_local std::mt19937 rng(std::random_device{}());
-  std::uniform_real_distribution<double> dist(0.0, 0.25);
-  return 1.0 - dist(rng);
-}
-
-std::chrono::milliseconds calculate_default_retry_delay(std::size_t retries_remaining,
-                                                        std::size_t max_retries) {
-  if (max_retries == 0) {
-    return std::chrono::milliseconds(static_cast<int>(kInitialRetryDelaySeconds * 1000));
-  }
-  std::size_t num_retries = max_retries - retries_remaining;
-  double sleep_seconds =
-      std::min(kInitialRetryDelaySeconds * std::pow(2.0, static_cast<double>(num_retries)),
-               kMaxRetryDelaySeconds);
-  sleep_seconds *= random_jitter_factor();
-  if (sleep_seconds < 0.0) {
-    sleep_seconds = 0.0;
-  }
-  return std::chrono::milliseconds(static_cast<long>(sleep_seconds * 1000.0));
 }
 
 std::optional<std::chrono::milliseconds> parse_numeric_retry_after_ms(const std::string& value) {
@@ -182,7 +161,7 @@ std::chrono::milliseconds compute_retry_delay(const HttpResponse* response,
       }
     }
   }
-  auto delay = calculate_default_retry_delay(retries_remaining, max_retries);
+  auto delay = utils::calculate_default_retry_delay(retries_remaining, max_retries);
   if (delay < std::chrono::milliseconds(0)) {
     return std::chrono::milliseconds(0);
   }
@@ -190,12 +169,6 @@ std::chrono::milliseconds compute_retry_delay(const HttpResponse* response,
     return kMaxRetryAfter;
   }
   return delay;
-}
-
-void sleep_for_duration(std::chrono::milliseconds duration) {
-  if (duration.count() > 0) {
-    std::this_thread::sleep_for(duration);
-  }
 }
 
 json completion_request_to_json(const CompletionRequest& request) {
@@ -432,7 +405,7 @@ std::string build_url(const std::string& base_url, const std::string& path) {
   if (path.empty()) {
     return base_url;
   }
-  if (path.find("http://") == 0 || path.find("https://") == 0) {
+  if (utils::is_absolute_url(path)) {
     return path;
   }
   std::string url = base_url;
@@ -567,8 +540,52 @@ OpenAIClient::OpenAIClient(ClientOptions options,
       beta_(*this),
       batches_(*this) {
   if (options_.api_key.empty()) {
-    throw OpenAIError("ClientOptions.api_key must be set");
+    if (auto env_api = utils::read_env("OPENAI_API_KEY")) {
+      options_.api_key = *env_api;
+    }
   }
+
+  if (auto env_base = utils::read_env("OPENAI_BASE_URL")) {
+    if (!env_base->empty()) {
+      if (options_.base_url == kDefaultBaseUrl) {
+        options_.base_url = *env_base;
+      }
+    } else if (options_.base_url.empty()) {
+      options_.base_url = kDefaultBaseUrl;
+    }
+  }
+
+  if (!options_.organization) {
+    if (auto env_org = utils::read_env("OPENAI_ORG_ID")) {
+      options_.organization = *env_org;
+    }
+  }
+
+  if (!options_.project) {
+    if (auto env_project = utils::read_env("OPENAI_PROJECT_ID")) {
+      options_.project = *env_project;
+    }
+  }
+
+  if (!options_.webhook_secret) {
+    if (auto env_webhook = utils::read_env("OPENAI_WEBHOOK_SECRET")) {
+      options_.webhook_secret = *env_webhook;
+    }
+  }
+
+  if (options_.log_level == LogLevel::Off) {
+    if (auto env_log = utils::read_env("OPENAI_LOG")) {
+      if (!env_log->empty()) {
+        options_.log_level = parse_log_level(*env_log, options_.log_level);
+      }
+    }
+  }
+
+  if (options_.api_key.empty()) {
+    throw OpenAIError("Missing API key. Provide ClientOptions.api_key or set the OPENAI_API_KEY environment variable.");
+  }
+
+  utils::validate_positive_integer("ClientOptions.timeout", options_.timeout.count());
 }
 
 Completion OpenAIClient::create_completion(const CompletionRequest& request,
@@ -590,6 +607,13 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
                                            const std::string& path,
                                            const std::string& body,
                                            const RequestOptions& options) const {
+  if (options.timeout) {
+    utils::validate_positive_integer("RequestOptions.timeout", options.timeout->count());
+  }
+  if (options.max_retries) {
+    utils::validate_positive_integer("RequestOptions.max_retries",
+                                     static_cast<long long>(*options.max_retries));
+  }
   const std::size_t max_retries = options.max_retries.value_or(options_.max_retries);
   std::size_t retries_remaining = max_retries;
   std::optional<std::string> idempotency_key = options.idempotency_key;
@@ -665,7 +689,7 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
       }
       log(LogLevel::Warn, "request failed, retrying", build_request_log_details(http_request, retry_count));
       auto delay = compute_retry_delay(nullptr, retries_remaining, max_retries);
-      sleep_for_duration(delay);
+      utils::sleep_for(delay);
       --retries_remaining;
       continue;
     } catch (const std::exception& error) {
@@ -674,7 +698,7 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
       }
       log(LogLevel::Warn, "request failed, retrying", build_request_log_details(http_request, retry_count));
       auto delay = compute_retry_delay(nullptr, retries_remaining, max_retries);
-      sleep_for_duration(delay);
+      utils::sleep_for(delay);
       --retries_remaining;
       continue;
     }
@@ -691,19 +715,16 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
       auto details = build_response_log_details(http_request, response, duration, retry_count);
       details["retry_delay_ms"] = delay.count();
       log(LogLevel::Warn, "retrying request after error", details);
-      sleep_for_duration(delay);
+      utils::sleep_for(delay);
       --retries_remaining;
       continue;
     }
 
     nlohmann::json error_payload = nlohmann::json::object();
     std::string message;
-    try {
-      auto payload = json::parse(response.body);
-      message = extract_error_message(payload);
-      error_payload = extract_error_payload(payload);
-    } catch (const std::exception&) {
-      // ignore parsing errors
+    if (auto payload = utils::safe_json(response.body)) {
+      message = extract_error_message(*payload);
+      error_payload = extract_error_payload(*payload);
     }
     auto duration = std::chrono::steady_clock::now() - start_time;
     log(LogLevel::Error, "request failed", build_response_log_details(http_request, response, duration, retry_count));

@@ -308,8 +308,9 @@ ChatCompletion ChatCompletionsResource::create(const ChatCompletionRequest& requ
   }
 }
 
-std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCompletionRequest& request,
-                                                                    const RequestOptions& options) const {
+void ChatCompletionsResource::create_stream(const ChatCompletionRequest& request,
+                                            const std::function<bool(const ServerSentEvent&)>& on_event,
+                                            const RequestOptions& options) const {
   json body;
   body["model"] = request.model;
 
@@ -378,7 +379,12 @@ std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCo
   request_options.headers["Accept"] = "text/event-stream";
   request_options.collect_body = false;
 
-  SSEEventStream stream;
+  SSEEventStream stream([&](const ServerSentEvent& event) {
+    if (on_event) {
+      return on_event(event);
+    }
+    return true;
+  });
   request_options.on_chunk = [&](const char* data, std::size_t size) {
     stream.feed(data, size);
   };
@@ -386,11 +392,28 @@ std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCo
   client_.perform_request("POST", "/chat/completions", body.dump(), request_options);
 
   stream.finalize();
-  return stream.events();
 }
 
 std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCompletionRequest& request) const {
   return create_stream(request, RequestOptions{});
+}
+
+void ChatCompletionsResource::create_stream(const ChatCompletionRequest& request,
+                                            const std::function<bool(const ServerSentEvent&)>& on_event) const {
+  create_stream(request, on_event, RequestOptions{});
+}
+
+std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCompletionRequest& request,
+                                                                    const RequestOptions& options) const {
+  std::vector<ServerSentEvent> events;
+  create_stream(
+      request,
+      [&](const ServerSentEvent& event) {
+        events.push_back(event);
+        return true;
+      },
+      options);
+  return events;
 }
 
 }  // namespace openai

@@ -245,6 +245,13 @@ public:
   std::vector<AssistantStreamEvent> create_stream(const std::string& thread_id,
                                                   const RunCreateRequest& request,
                                                   const RequestOptions& options) const;
+  void create_stream(const std::string& thread_id,
+                     const RunCreateRequest& request,
+                     const std::function<bool(const AssistantStreamEvent&)>& on_event) const;
+  void create_stream(const std::string& thread_id,
+                     const RunCreateRequest& request,
+                     const std::function<bool(const AssistantStreamEvent&)>& on_event,
+                     const RequestOptions& options) const;
 
   AssistantStreamSnapshot create_stream_snapshot(const std::string& thread_id, const RunCreateRequest& request) const;
   AssistantStreamSnapshot create_stream_snapshot(const std::string& thread_id,
@@ -255,6 +262,13 @@ public:
   std::vector<AssistantStreamEvent> stream(const std::string& thread_id,
                                            const RunCreateRequest& request,
                                            const RequestOptions& options) const;
+  void stream(const std::string& thread_id,
+              const RunCreateRequest& request,
+              const std::function<bool(const AssistantStreamEvent&)>& on_event) const;
+  void stream(const std::string& thread_id,
+              const RunCreateRequest& request,
+              const std::function<bool(const AssistantStreamEvent&)>& on_event,
+              const RequestOptions& options) const;
 
   std::vector<AssistantStreamEvent> submit_tool_outputs_stream(const std::string& thread_id,
                                                                const std::string& run_id,
@@ -263,12 +277,28 @@ public:
                                                                const std::string& run_id,
                                                                const RunSubmitToolOutputsRequest& request,
                                                                const RequestOptions& options) const;
+  void submit_tool_outputs_stream(const std::string& thread_id,
+                                  const std::string& run_id,
+                                  const RunSubmitToolOutputsRequest& request,
+                                  const std::function<bool(const AssistantStreamEvent&)>& on_event) const;
+  void submit_tool_outputs_stream(const std::string& thread_id,
+                                  const std::string& run_id,
+                                  const RunSubmitToolOutputsRequest& request,
+                                  const std::function<bool(const AssistantStreamEvent&)>& on_event,
+                                  const RequestOptions& options) const;
 
   std::vector<AssistantStreamEvent> submit_tool_outputs_stream(const std::string& run_id,
                                                                const RunSubmitToolOutputsRequest& request) const;
   std::vector<AssistantStreamEvent> submit_tool_outputs_stream(const std::string& run_id,
                                                                const RunSubmitToolOutputsRequest& request,
                                                                const RequestOptions& options) const;
+  void submit_tool_outputs_stream(const std::string& run_id,
+                                  const RunSubmitToolOutputsRequest& request,
+                                  const std::function<bool(const AssistantStreamEvent&)>& on_event) const;
+  void submit_tool_outputs_stream(const std::string& run_id,
+                                  const RunSubmitToolOutputsRequest& request,
+                                  const std::function<bool(const AssistantStreamEvent&)>& on_event,
+                                  const RequestOptions& options) const;
 
   AssistantStreamSnapshot submit_tool_outputs_stream_snapshot(const std::string& thread_id,
                                                               const std::string& run_id,

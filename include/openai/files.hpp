@@ -8,6 +8,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "openai/utils/to_file.hpp"
+
 namespace openai {
 
 struct FileObject {
@@ -44,9 +46,12 @@ struct FileContent {
 
 struct FileUploadRequest {
   std::string purpose;
-  std::string file_path;
+  std::optional<std::string> file_path;
+  std::optional<utils::UploadFile> file_data;
   std::optional<std::string> file_name;
   std::optional<std::string> content_type;
+
+  utils::UploadFile materialize(const std::string& default_filename = "file") const;
 };
 
 struct RequestOptions;

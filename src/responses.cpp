@@ -2230,6 +2230,37 @@ std::vector<ServerSentEvent> ResponsesResource::create_stream(const ResponseRequ
   return create_stream(request, RequestOptions{});
 }
 
+void ResponsesResource::create_stream(const ResponseRequest& request,
+                                      const std::function<bool(const ResponseStreamEvent&)>& on_event,
+                                      const RequestOptions& options) const {
+  SSEEventStream stream([&](const ServerSentEvent& sse_event) {
+    if (!on_event) {
+      return true;
+    }
+    if (auto parsed = parse_response_stream_event(sse_event)) {
+      return on_event(*parsed);
+    }
+    return true;
+  });
+
+  auto body = build_request_body(request);
+  body["stream"] = true;
+
+  RequestOptions request_options = options;
+  request_options.headers["Accept"] = "text/event-stream";
+  request_options.collect_body = false;
+  request_options.on_chunk = [&](const char* data, std::size_t size) { stream.feed(data, size); };
+
+  client_.perform_request("POST", kResponseEndpoint, body.dump(), request_options);
+
+  stream.finalize();
+}
+
+void ResponsesResource::create_stream(const ResponseRequest& request,
+                                      const std::function<bool(const ResponseStreamEvent&)>& on_event) const {
+  create_stream(request, on_event, RequestOptions{});
+}
+
 std::vector<ServerSentEvent> ResponsesResource::retrieve_stream(const std::string& response_id,
                                                                 const ResponseRetrieveOptions& retrieve_options,
                                                                 const RequestOptions& options) const {

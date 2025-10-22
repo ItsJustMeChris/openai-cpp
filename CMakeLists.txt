@@ -14,9 +14,13 @@ add_library(openai-cpp
     src/http_client.cpp
     src/utils/base64.cpp
     src/utils/multipart.cpp
+    src/utils/env.cpp
+    src/utils/time.cpp
     src/utils/uuid.cpp
     src/utils/platform.cpp
     src/utils/qs.cpp
+    src/utils/to_file.cpp
+    src/utils/values.cpp
     src/logging.cpp
     src/chat.cpp
     src/moderations.cpp

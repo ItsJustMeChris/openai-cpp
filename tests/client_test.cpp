@@ -6,6 +6,7 @@
 #include "openai/error.hpp"
 
 #include "support/mock_http_client.hpp"
+#include "support/env_guard.hpp"
 
 using openai::ClientOptions;
 using openai::HttpResponse;
@@ -16,6 +17,7 @@ using openai::BadRequestError;
 using openai::InternalServerError;
 using openai::LogLevel;
 namespace mock = openai::testing;
+namespace testing_utils = openai::testing;
 namespace utils = openai::utils;
 
 TEST(OpenAIClientPlatformTest, AddsPlatformHeadersAndUserAgent) {
@@ -57,6 +59,35 @@ TEST(OpenAIClientPlatformTest, AddsPlatformHeadersAndUserAgent) {
   auto it = headers.find("User-Agent");
   ASSERT_NE(it, headers.end());
   EXPECT_EQ(it->second, utils::user_agent());
+}
+
+TEST(OpenAIClientEnvTest, UsesEnvironmentDefaultsWhenOptionsMissing) {
+  testing_utils::EnvVarGuard api_guard("OPENAI_API_KEY", std::string("sk-env"));
+  testing_utils::EnvVarGuard base_guard("OPENAI_BASE_URL", std::string("https://env.example/v42"));
+  testing_utils::EnvVarGuard org_guard("OPENAI_ORG_ID", std::string("org-env"));
+  testing_utils::EnvVarGuard project_guard("OPENAI_PROJECT_ID", std::string("proj-env"));
+  testing_utils::EnvVarGuard webhook_guard("OPENAI_WEBHOOK_SECRET", std::string("whsec-env"));
+  testing_utils::EnvVarGuard log_guard("OPENAI_LOG", std::string("debug"));
+
+  auto http_mock = std::make_unique<mock::MockHttpClient>();
+  HttpResponse response;
+  response.status_code = 200;
+  response.body = R"({"object":"list","data":[]})";
+  http_mock->enqueue_response(response);
+
+  ClientOptions options;  // Intentionally empty to rely on environment defaults.
+
+  OpenAIClient client(std::move(options), std::move(http_mock));
+
+  EXPECT_EQ(client.options().api_key, "sk-env");
+  EXPECT_EQ(client.options().base_url, "https://env.example/v42");
+  ASSERT_TRUE(client.options().organization.has_value());
+  EXPECT_EQ(*client.options().organization, "org-env");
+  ASSERT_TRUE(client.options().project.has_value());
+  EXPECT_EQ(*client.options().project, "proj-env");
+  ASSERT_TRUE(client.options().webhook_secret.has_value());
+  EXPECT_EQ(*client.options().webhook_secret, "whsec-env");
+  EXPECT_EQ(client.options().log_level, LogLevel::Debug);
 }
 
 TEST(OpenAIClientLoggingTest, EmitsLogsWithSanitizedHeaders) {

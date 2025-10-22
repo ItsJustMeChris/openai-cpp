@@ -180,6 +180,54 @@ TEST(RunsResourceTest, CreateStreamCollectsEvents) {
   EXPECT_TRUE(std::holds_alternative<AssistantMessageEvent>(events[5]));
 }
 
+TEST(RunsResourceTest, CreateStreamSupportsCallback) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string sse =
+      "event: thread.created\n"
+      "data: {\"id\":\"thread_1\",\"object\":\"thread\",\"created_at\":1}\n\n"
+      "event: thread.run.created\n"
+      "data: {\"id\":\"run_1\",\"assistant_id\":\"asst_1\",\"created_at\":1,\"model\":\"gpt-4o\",\"object\":\"thread.run\",\"parallel_tool_calls\":false,\"status\":\"in_progress\",\"thread_id\":\"thread_1\",\"tools\":[]}\n\n"
+      "event: thread.run.completed\n"
+      "data: {\"id\":\"run_1\",\"assistant_id\":\"asst_1\",\"created_at\":1,\"model\":\"gpt-4o\",\"object\":\"thread.run\",\"parallel_tool_calls\":false,\"status\":\"completed\",\"thread_id\":\"thread_1\",\"tools\":[]}\n\n";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, sse});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  RunCreateRequest request;
+  request.assistant_id = "asst_1";
+
+  std::size_t event_count = 0;
+  bool saw_completed = false;
+
+  client.runs().create_stream(
+      "thread_1",
+      request,
+      [&](const AssistantStreamEvent& event) {
+        ++event_count;
+        if (std::holds_alternative<AssistantRunEvent>(event)) {
+          const auto& run_event = std::get<AssistantRunEvent>(event);
+          if (run_event.run.status == "completed") {
+            saw_completed = true;
+            return false;  // stop once completed event arrives
+          }
+        }
+        return true;
+      });
+
+  EXPECT_GE(event_count, 2u);
+  EXPECT_TRUE(saw_completed);
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  EXPECT_EQ(mock_ptr->last_request()->headers.at("X-Stainless-Helper-Method"), "stream");
+}
+
 TEST(RunsResourceTest, StreamAliasUsesCreateStreamImplementation) {
   using namespace openai;
 

@@ -16,11 +16,11 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 
 ## Internal Utilities
 - [x] Query string builder (`internal/qs`)
-- [ ] Env/platform shims (`internal/shims`, `detect-platform`)
-- [ ] Value validators (`validatePositiveInteger`, `isAbsoluteURL`, etc.)
-- [ ] Sleep/backoff utilities
+- [x] Env/platform shims (`internal/shims`, `detect-platform`)
+- [x] Value validators (`validatePositiveInteger`, `isAbsoluteURL`, etc.)
+- [x] Sleep/backoff utilities
 - [x] UUID helpers
-- [ ] File conversion utilities (`to-file`)
+- [x] File conversion utilities (`to-file`)
 
 ## Client Facade
 - [x] `client.completions().create`

@@ -194,6 +194,36 @@ TEST(FilesResourceTest, CreateBuildsMultipartBody) {
   std::filesystem::remove(tmp);
 }
 
+TEST(FilesResourceTest, CreateSupportsInMemoryData) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, R"({"id":"file-bytes","bytes":4,"created_at":1,"filename":"memory.txt","object":"file","purpose":"assistants"})"});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  FileUploadRequest request;
+  request.purpose = "assistants";
+  request.file_data = openai::utils::UploadFile{
+      std::vector<std::uint8_t>{'t', 'e', 's', 't'},
+      "memory.txt",
+      std::string("text/plain")};
+
+  auto file = client.files().create(request);
+  EXPECT_EQ(file.id, "file-bytes");
+
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  const auto& last_request = *mock_ptr->last_request();
+  EXPECT_NE(last_request.body.find("test"), std::string::npos);
+  ASSERT_TRUE(last_request.headers.count("Content-Type"));
+  EXPECT_NE(last_request.headers.at("Content-Type").find("multipart/form-data"), std::string::npos);
+}
+
 TEST(FilesResourceTest, ContentReturnsBinaryData) {
   using namespace openai;
 

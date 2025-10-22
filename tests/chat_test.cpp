@@ -45,6 +45,53 @@ TEST(ChatCompletionsResourceTest, CreateStreamParsesEvents) {
   EXPECT_EQ(mock_ptr->last_request()->headers.at("Accept"), "text/event-stream");
 }
 
+TEST(ChatCompletionsResourceTest, CreateStreamInvokesCallbackIncrementally) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string body =
+      "event: message\n"
+      "data: {\"id\":\"chatcmpl-123\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n"
+      "event: message\n"
+      "data: {\"id\":\"chatcmpl-123\",\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n\n";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, body});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  ChatCompletionRequest request;
+  request.model = "gpt-4o";
+  ChatMessage message;
+  message.role = "user";
+  ChatMessageContent content;
+  content.type = ChatMessageContent::Type::Text;
+  content.text = "Hi";
+  message.content.push_back(content);
+  request.messages.push_back(message);
+
+  std::vector<std::string> deltas;
+
+  client.chat().completions().create_stream(
+      request,
+      [&](const ServerSentEvent& event) {
+        if (event.data.find("content") != std::string::npos) {
+          deltas.push_back(event.data);
+        }
+        // Stop after first chunk to ensure early termination works.
+        return deltas.size() < 1;
+      });
+
+  ASSERT_EQ(deltas.size(), 1u);
+  EXPECT_NE(deltas[0].find("Hello"), std::string::npos);
+  ASSERT_TRUE(mock_ptr->last_request().has_value());
+  EXPECT_EQ(mock_ptr->last_request()->headers.at("Accept"), "text/event-stream");
+}
+
 TEST(ChatCompletionsResourceTest, CreateSerializesTypedFields) {
   using namespace openai;
 

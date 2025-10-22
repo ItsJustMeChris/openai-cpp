@@ -7,9 +7,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include <fstream>
 #include <memory>
-#include <sstream>
 
 namespace openai {
 namespace {
@@ -18,21 +16,39 @@ using json = nlohmann::json;
 
 constexpr const char* kFilesPath = "/files";
 
-std::string filename_from_path(const std::string& path) {
-  auto pos = path.find_last_of("/\\");
-  if (pos == std::string::npos) {
-    return path;
+}  // namespace
+
+utils::UploadFile FileUploadRequest::materialize(const std::string& default_filename) const {
+  utils::UploadFile upload;
+
+  if (file_data.has_value()) {
+    upload = *file_data;
+  } else if (file_path.has_value()) {
+    upload = utils::to_file(*file_path);
+  } else {
+    throw OpenAIError("FileUploadRequest must provide either file_path or file_data");
   }
-  return path.substr(pos + 1);
+
+  if (file_name) {
+    upload.filename = *file_name;
+  }
+
+  if (upload.filename.empty()) {
+    upload.filename = default_filename;
+  }
+
+  if (content_type) {
+    upload.content_type = content_type;
+  }
+
+  if (!upload.content_type.has_value()) {
+    upload.content_type = std::string("application/octet-stream");
+  }
+
+  return upload;
 }
 
-std::vector<std::uint8_t> read_file_binary(const std::string& path) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file) {
-    throw OpenAIError("Failed to open file: " + path);
-  }
-  return std::vector<std::uint8_t>((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-}
+namespace {
 
 FileObject parse_file(const json& payload) {
   FileObject file;
@@ -166,12 +182,12 @@ FileDeleted FilesResource::remove(const std::string& file_id) const {
 }
 
 FileObject FilesResource::create(const FileUploadRequest& request, const RequestOptions& options) const {
-  auto file_data = read_file_binary(request.file_path);
+  utils::UploadFile upload = request.materialize("upload.bin");
+  const std::string content_type = *upload.content_type;
+
   utils::MultipartFormData form;
   form.append_text("purpose", request.purpose);
-  const std::string filename = request.file_name.value_or(filename_from_path(request.file_path));
-  const std::string content_type = request.content_type.value_or("application/octet-stream");
-  form.append_file("file", filename, content_type, file_data);
+  form.append_file("file", upload.filename, content_type, upload.data);
   auto encoded = form.build();
 
   RequestOptions request_options = options;

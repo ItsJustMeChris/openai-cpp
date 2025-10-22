@@ -23,6 +23,10 @@ add_executable(openai-cpp-tests
     ${CMAKE_CURRENT_LIST_DIR}/chat_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/images_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/utils_qs_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/utils_env_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/utils_to_file_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/utils_values_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/utils_time_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/batches_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/containers_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/audio_test.cpp

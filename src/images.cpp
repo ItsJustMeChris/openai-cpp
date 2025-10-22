@@ -5,8 +5,6 @@
 
 #include <nlohmann/json.hpp>
 
-#include <fstream>
-
 namespace openai {
 namespace {
 
@@ -39,12 +37,10 @@ ImagesResponse parse_images_response(const json& payload) {
   return response;
 }
 
-std::string load_file(const std::string& path) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file) {
-    throw OpenAIError("Failed to open file: " + path);
-  }
-  return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+std::string materialize_file_as_string(const FileUploadRequest& request,
+                                       const std::string& default_filename) {
+  auto upload = request.materialize(default_filename);
+  return std::string(upload.data.begin(), upload.data.end());
 }
 
 std::string build_multipart_body(const std::vector<std::pair<std::string, std::string>>& parts,
@@ -61,7 +57,7 @@ std::string build_multipart_body(const std::vector<std::pair<std::string, std::s
 
 std::string build_image_multipart(const ImageVariationRequest& request, const std::string& boundary) {
   std::vector<std::pair<std::string, std::string>> parts;
-  parts.emplace_back("image", load_file(request.image.file_path));
+  parts.emplace_back("image", materialize_file_as_string(request.image, "image.bin"));
   if (request.model) parts.emplace_back("model", *request.model);
   if (request.prompt) parts.emplace_back("prompt", *request.prompt);
   if (request.n) parts.emplace_back("n", std::to_string(*request.n));
@@ -130,9 +126,9 @@ ImagesResponse ImagesResource::edit(const ImageEditRequest& request, const Reque
   if (request.n) parts.emplace_back("n", std::to_string(*request.n));
   if (request.size) parts.emplace_back("size", *request.size);
   if (request.response_format) parts.emplace_back("response_format", *request.response_format);
-  parts.emplace_back("image", load_file(request.image.file_path));
+  parts.emplace_back("image", materialize_file_as_string(request.image, "image.bin"));
   if (request.mask) {
-    parts.emplace_back("mask", load_file(request.mask->file_path));
+    parts.emplace_back("mask", materialize_file_as_string(*request.mask, "mask.bin"));
   }
   if (request.quality) parts.emplace_back("quality", *request.quality);
   if (request.style) parts.emplace_back("style", *request.style);
