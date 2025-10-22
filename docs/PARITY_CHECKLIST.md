@@ -19,7 +19,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [ ] Env/platform shims (`internal/shims`, `detect-platform`)
 - [ ] Value validators (`validatePositiveInteger`, `isAbsoluteURL`, etc.)
 - [ ] Sleep/backoff utilities
-- [ ] UUID helpers
+- [x] UUID helpers
 - [ ] File conversion utilities (`to-file`)
 
 ## Client Facade

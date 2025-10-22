@@ -13,6 +13,7 @@ add_library(openai-cpp
     src/client.cpp
     src/http_client.cpp
     src/utils/base64.cpp
+    src/utils/uuid.cpp
     src/utils/platform.cpp
     src/chat.cpp
     src/moderations.cpp

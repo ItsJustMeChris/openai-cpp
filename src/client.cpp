@@ -26,6 +26,7 @@
 
 #include "openai/utils/base64.hpp"
 #include "openai/utils/platform.hpp"
+#include "openai/utils/uuid.hpp"
 
 namespace openai {
 namespace {
@@ -186,28 +187,6 @@ std::chrono::milliseconds compute_retry_delay(const HttpResponse* response,
     return kMaxRetryAfter;
   }
   return delay;
-}
-
-std::string generate_uuid4() {
-  std::array<unsigned char, 16> data{};
-  std::random_device rd;
-  std::mt19937 rng(rd());
-  std::uniform_int_distribution<int> dist(0, 255);
-  for (auto& byte : data) {
-    byte = static_cast<unsigned char>(dist(rng));
-  }
-  data[6] = (data[6] & 0x0F) | 0x40;
-  data[8] = (data[8] & 0x3F) | 0x80;
-
-  std::ostringstream oss;
-  oss << std::hex << std::setfill('0');
-  for (std::size_t i = 0; i < data.size(); ++i) {
-    oss << std::setw(2) << static_cast<int>(data[i]);
-    if (i == 3 || i == 5 || i == 7 || i == 9) {
-      oss << '-';
-    }
-  }
-  return oss.str();
 }
 
 void sleep_for_duration(std::chrono::milliseconds duration) {
@@ -548,7 +527,7 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
   std::size_t retries_remaining = max_retries;
   std::optional<std::string> idempotency_key = options.idempotency_key;
   if (!idempotency_key && !iequals(method, "GET")) {
-    idempotency_key = generate_uuid4();
+    idempotency_key = utils::uuid4();
   }
 
   auto build_request = [&](std::size_t retry_count) {
