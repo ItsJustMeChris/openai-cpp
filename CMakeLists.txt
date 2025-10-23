@@ -44,6 +44,7 @@ add_library(openai-cpp
     src/assistant_stream.cpp
     src/run_steps.cpp
     src/runs.cpp
+    src/evals.cpp
     src/streaming.cpp
     src/uploads.cpp
 )

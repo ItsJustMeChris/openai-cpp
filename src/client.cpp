@@ -718,7 +718,8 @@ OpenAIClient::OpenAIClient(ClientOptions options,
       conversations_(*this),
       beta_(*this),
       batches_(*this),
-      uploads_(*this) {
+      uploads_(*this),
+      evals_(*this) {
   if (options_.api_key.empty() && !options_.api_key_provider) {
     if (auto env_api = utils::read_env("OPENAI_API_KEY")) {
       options_.api_key = *env_api;

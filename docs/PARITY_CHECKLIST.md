@@ -65,6 +65,8 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Videos
 - [x] Webhooks
 - [x] Beta features (`beta`, `graders`, `realtime`, etc.)
+- [x] Evals (evaluations, runs, output items)
+  - [x] Evals – double-checked parity (October 23, 2025)
 - [x] Azure OpenAI compatibility layer
 
 ## Tooling & Tests
