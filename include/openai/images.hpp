@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -7,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include "openai/files.hpp"
+#include "openai/streaming.hpp"
 
 namespace openai {
 
@@ -91,6 +93,49 @@ struct ImageEditRequest {
   std::optional<std::string> user;
 };
 
+struct ImageStreamPartialEvent {
+  std::optional<std::string> b64_json;
+  std::optional<std::string> background;
+  int created_at = 0;
+  std::optional<std::string> output_format;
+  int partial_image_index = 0;
+  std::optional<std::string> quality;
+  std::optional<std::string> size;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ImageStreamCompletedEvent {
+  std::optional<std::string> b64_json;
+  std::optional<std::string> background;
+  int created_at = 0;
+  std::optional<std::string> output_format;
+  std::optional<std::string> quality;
+  std::optional<std::string> size;
+  std::optional<ImageUsage> usage;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ImageStreamEvent {
+  enum class Type {
+    ImageGenerationPartialImage,
+    ImageGenerationCompleted,
+    ImageEditPartialImage,
+    ImageEditCompleted,
+    Unknown
+  };
+
+  Type type = Type::Unknown;
+  std::string type_name;
+  std::optional<ImageStreamPartialEvent> generation_partial;
+  std::optional<ImageStreamCompletedEvent> generation_completed;
+  std::optional<ImageStreamPartialEvent> edit_partial;
+  std::optional<ImageStreamCompletedEvent> edit_completed;
+  std::optional<std::string> event_name;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+std::optional<ImageStreamEvent> parse_image_stream_event(const ServerSentEvent& event);
+
 struct RequestOptions;
 class OpenAIClient;
 
@@ -106,6 +151,24 @@ public:
 
   ImagesResponse edit(const ImageEditRequest& request) const;
   ImagesResponse edit(const ImageEditRequest& request, const RequestOptions& options) const;
+
+  std::vector<ServerSentEvent> generate_stream(const ImageGenerateRequest& request) const;
+  std::vector<ServerSentEvent> generate_stream(const ImageGenerateRequest& request,
+                                               const RequestOptions& options) const;
+  void generate_stream(const ImageGenerateRequest& request,
+                       const std::function<bool(const ImageStreamEvent&)>& on_event) const;
+  void generate_stream(const ImageGenerateRequest& request,
+                       const std::function<bool(const ImageStreamEvent&)>& on_event,
+                       const RequestOptions& options) const;
+
+  std::vector<ServerSentEvent> edit_stream(const ImageEditRequest& request) const;
+  std::vector<ServerSentEvent> edit_stream(const ImageEditRequest& request,
+                                           const RequestOptions& options) const;
+  void edit_stream(const ImageEditRequest& request,
+                   const std::function<bool(const ImageStreamEvent&)>& on_event) const;
+  void edit_stream(const ImageEditRequest& request,
+                   const std::function<bool(const ImageStreamEvent&)>& on_event,
+                   const RequestOptions& options) const;
 
 private:
   OpenAIClient& client_;

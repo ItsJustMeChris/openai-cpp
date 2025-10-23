@@ -42,7 +42,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Moderations (basic create)
 - [x] Files (list/retrieve/create/delete/content; advanced upload helpers pending)
   - [x] Files – double-checked parity (October 23, 2025)
-- [x] Images (generate/edit/variation basic support; streaming events pending)
+- [x] Images (generate/edit/variation with SSE streaming support)
   - [x] Images – double-checked parity (October 23, 2025)
 - [x] Audio transcriptions (create)
 - [x] Audio translations (create)
@@ -69,6 +69,13 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Evals (evaluations, runs, output items)
   - [x] Evals – double-checked parity (October 23, 2025)
 - [x] Azure OpenAI compatibility layer
+
+## Streaming Coverage
+- [x] Responses streaming (`create_stream`, `retrieve_stream`)
+- [x] Chat completions streaming (`chat.completions.create_stream`)
+- [x] Assistants/Threads streaming helpers (`runs`, `run_steps`, `threads`)
+- [x] Images streaming (`images.generate_stream`, `images.edit_stream`)
+- [ ] Legacy completions streaming (`completions.create` with `stream=true`)
 
 ## Tooling & Tests
 - [ ] Unit tests with mock HTTP client
