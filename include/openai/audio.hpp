@@ -49,6 +49,14 @@ struct TranscriptionSegment {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct TranscriptionTextDeltaEvent {
+  std::string type;
+  std::string delta;
+  std::optional<std::vector<TranscriptionLogprob>> logprobs;
+  std::optional<std::string> segment_id;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct TranscriptionWord {
   double end = 0.0;
   double start = 0.0;

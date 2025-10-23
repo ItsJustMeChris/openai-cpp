@@ -34,15 +34,21 @@ void apply_file_list_params(const FileListParams& params, RequestOptions& option
 }  // namespace
 
 utils::UploadFile FileUploadRequest::materialize(const std::string& default_filename) const {
-  utils::UploadFile upload;
+  std::optional<utils::UploadFile> source;
 
-  if (file_data.has_value()) {
-    upload = *file_data;
+  if (file.has_value()) {
+    source = *file;
+  } else if (file_data.has_value()) {
+    source = *file_data;
   } else if (file_path.has_value()) {
-    upload = utils::to_file(*file_path);
-  } else {
-    throw OpenAIError("FileUploadRequest must provide either file_path or file_data");
+    source = utils::to_file(*file_path);
   }
+
+  if (!source.has_value()) {
+    throw OpenAIError("FileUploadRequest must provide file, file_path, or file_data");
+  }
+
+  utils::UploadFile upload = std::move(*source);
 
   if (file_name) {
     upload.filename = *file_name;

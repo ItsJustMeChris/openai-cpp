@@ -7,7 +7,6 @@
 
 #include <nlohmann/json.hpp>
 
-#include <fstream>
 #include <memory>
 
 namespace openai {
@@ -23,14 +22,6 @@ std::string filename_from_path(const std::string& path) {
     return path;
   }
   return path.substr(pos + 1);
-}
-
-std::vector<std::uint8_t> read_file_binary(const std::string& path) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file) {
-    throw OpenAIError("Failed to open file: " + path);
-  }
-  return std::vector<std::uint8_t>((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 }
 
 std::string model_to_string(VideoModel model) {
@@ -184,33 +175,49 @@ VideoDeleteResponse parse_video_delete(const json& payload) {
 
 void append_upload(utils::MultipartFormData& form,
                    const std::string& field,
-                   const std::optional<std::vector<std::uint8_t>>& data,
-                   const std::optional<std::string>& filename,
-                   const std::optional<std::string>& content_type) {
-  if (!data) {
+                   const std::optional<utils::UploadFile>& file) {
+  if (!file) {
     return;
   }
-  std::string effective_filename = filename.value_or("file.bin");
-  std::string effective_type = content_type.value_or("application/octet-stream");
-  form.append_file(field, effective_filename, effective_type, *data);
+  std::string effective_filename = file->filename.empty() ? "file.bin" : file->filename;
+  std::string effective_type = file->content_type.value_or("application/octet-stream");
+  form.append_file(field, effective_filename, effective_type, file->data);
 }
 
 VideoCreateRequest normalize_create_request(const VideoCreateRequest& request) {
   VideoCreateRequest normalized = request;
-  if (!normalized.input_reference_data && normalized.input_reference_path) {
-    normalized.input_reference_data = read_file_binary(*normalized.input_reference_path);
-    normalized.input_reference_filename =
-        normalized.input_reference_filename.value_or(filename_from_path(*normalized.input_reference_path));
+  if (!normalized.input_reference) {
+    if (normalized.input_reference_data) {
+      const std::string filename = normalized.input_reference_filename.value_or("input.bin");
+      normalized.input_reference =
+          utils::to_file(*normalized.input_reference_data, filename, normalized.input_reference_content_type);
+    } else if (normalized.input_reference_path) {
+      normalized.input_reference = utils::to_file(*normalized.input_reference_path,
+                                                  normalized.input_reference_filename,
+                                                  normalized.input_reference_content_type);
+      if (normalized.input_reference && normalized.input_reference->filename.empty()) {
+        normalized.input_reference->filename = filename_from_path(*normalized.input_reference_path);
+      }
+    }
   }
   return normalized;
 }
 
 VideoRemixParams normalize_remix_request(const VideoRemixParams& params) {
   VideoRemixParams normalized = params;
-  if (!normalized.input_reference_data && normalized.input_reference_path) {
-    normalized.input_reference_data = read_file_binary(*normalized.input_reference_path);
-    normalized.input_reference_filename =
-        normalized.input_reference_filename.value_or(filename_from_path(*normalized.input_reference_path));
+  if (!normalized.input_reference) {
+    if (normalized.input_reference_data) {
+      const std::string filename = normalized.input_reference_filename.value_or("input.bin");
+      normalized.input_reference =
+          utils::to_file(*normalized.input_reference_data, filename, normalized.input_reference_content_type);
+    } else if (normalized.input_reference_path) {
+      normalized.input_reference = utils::to_file(*normalized.input_reference_path,
+                                                  normalized.input_reference_filename,
+                                                  normalized.input_reference_content_type);
+      if (normalized.input_reference && normalized.input_reference->filename.empty()) {
+        normalized.input_reference->filename = filename_from_path(*normalized.input_reference_path);
+      }
+    }
   }
   return normalized;
 }
@@ -228,11 +235,7 @@ Video VideosResource::create(const VideoCreateRequest& request, const RequestOpt
   if (normalized.model) form.append_text("model", model_to_string(*normalized.model));
   if (normalized.seconds) form.append_text("seconds", seconds_to_string(*normalized.seconds));
   if (normalized.size) form.append_text("size", size_to_string(*normalized.size));
-  append_upload(form,
-                "input_reference",
-                normalized.input_reference_data,
-                normalized.input_reference_filename,
-                normalized.input_reference_content_type);
+  append_upload(form, "input_reference", normalized.input_reference);
   auto encoded = form.build();
 
   RequestOptions request_options = options;
@@ -374,11 +377,7 @@ Video VideosResource::remix(const std::string& video_id,
   auto normalized = normalize_remix_request(params);
   utils::MultipartFormData form;
   form.append_text("prompt", normalized.prompt);
-  append_upload(form,
-                "input_reference",
-                normalized.input_reference_data,
-                normalized.input_reference_filename,
-                normalized.input_reference_content_type);
+  append_upload(form, "input_reference", normalized.input_reference);
   auto encoded = form.build();
 
   RequestOptions request_options = options;
@@ -395,4 +394,3 @@ Video VideosResource::remix(const std::string& video_id,
 }
 
 }  // namespace openai
-

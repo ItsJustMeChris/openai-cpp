@@ -8,6 +8,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "openai/utils/to_file.hpp"
+
 namespace openai {
 
 struct RequestOptions;
@@ -69,6 +71,7 @@ struct VideoList {
 
 struct VideoCreateRequest {
   std::string prompt;
+  std::optional<utils::UploadFile> input_reference;
   std::optional<std::string> input_reference_path;
   std::optional<std::vector<std::uint8_t>> input_reference_data;
   std::optional<std::string> input_reference_filename;
@@ -90,6 +93,7 @@ struct VideoDownloadContentParams {
 
 struct VideoRemixParams {
   std::string prompt;
+  std::optional<utils::UploadFile> input_reference;
   std::optional<std::string> input_reference_path;
   std::optional<std::vector<std::uint8_t>> input_reference_data;
   std::optional<std::string> input_reference_filename;

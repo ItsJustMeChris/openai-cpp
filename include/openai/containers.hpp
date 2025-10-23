@@ -9,6 +9,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "openai/utils/to_file.hpp"
+
 namespace openai {
 
 struct RequestOptions;
@@ -75,6 +77,7 @@ struct ContainerFileList {
 
 struct ContainerFileCreateRequest {
   std::optional<std::string> file_id;
+  std::optional<utils::UploadFile> file;
   std::optional<std::string> file_path;
   std::optional<std::vector<std::uint8_t>> file_data;
   std::optional<std::string> file_name;

@@ -58,6 +58,7 @@ struct FileUploadExpiresAfter {
 
 struct FileUploadRequest {
   std::string purpose;
+  std::optional<utils::UploadFile> file;
   std::optional<std::string> file_path;
   std::optional<utils::UploadFile> file_data;
   std::optional<std::string> file_name;

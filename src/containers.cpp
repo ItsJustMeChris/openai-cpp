@@ -260,25 +260,39 @@ ContainerFile ContainerFilesResource::create(const std::string& container_id,
   if (request.file_id) {
     body = file_create_json_body(request).dump();
   } else {
-    std::vector<std::uint8_t> data;
-    std::string filename;
-    std::string content_type = request.content_type.value_or("application/octet-stream");
+    std::optional<utils::UploadFile> upload;
 
-    if (request.file_data) {
-      data = *request.file_data;
+    if (request.file) {
+      upload = *request.file;
+    } else if (request.file_data) {
       if (!request.file_name) {
         throw OpenAIError("ContainerFileCreateRequest.file_name must be provided when file_data is set");
       }
-      filename = *request.file_name;
+      upload = utils::to_file(*request.file_data, *request.file_name, request.content_type);
     } else if (request.file_path) {
-      data = read_file_binary(*request.file_path);
-      filename = request.file_name.value_or(filename_from_path(*request.file_path));
-    } else {
-      throw OpenAIError("ContainerFileCreateRequest must provide either file_id, file_path, or file_data");
+      upload = utils::to_file(*request.file_path);
+    }
+
+    if (!upload.has_value()) {
+      throw OpenAIError("ContainerFileCreateRequest must provide file_id, file, file_path, or file_data");
+    }
+
+    if (request.file_name) {
+      upload->filename = *request.file_name;
+    } else if (request.file_path && upload->filename.empty()) {
+      upload->filename = filename_from_path(*request.file_path);
+    }
+
+    if (request.content_type) {
+      upload->content_type = *request.content_type;
+    }
+
+    if (!upload->content_type.has_value()) {
+      upload->content_type = std::string("application/octet-stream");
     }
 
     utils::MultipartFormData form;
-    form.append_file("file", filename, content_type, data);
+    form.append_file("file", upload->filename, *upload->content_type, upload->data);
     auto encoded = form.build();
     request_options.headers["Content-Type"] = encoded.content_type;
     body.assign(encoded.body.begin(), encoded.body.end());
