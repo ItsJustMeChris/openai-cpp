@@ -32,6 +32,7 @@
 #include "openai/beta.hpp"
 #include "openai/assistants.hpp"
 #include "openai/threads.hpp"
+#include "openai/graders.hpp"
 #include "openai/messages.hpp"
 #include "openai/runs.hpp"
 #include "openai/run_steps.hpp"
@@ -71,6 +72,12 @@ struct ClientOptions {
   std::optional<std::string> webhook_secret;
   LogLevel log_level = LogLevel::Off;
   LoggerCallback logger;
+  std::function<std::string()> api_key_provider;
+  bool use_bearer_auth = true;
+  std::optional<std::string> alternative_auth_header;
+  std::string alternative_auth_prefix;
+  bool azure_deployment_routing = false;
+  std::optional<std::string> azure_deployment_name;
 };
 
 class OpenAIClient;
@@ -157,6 +164,9 @@ public:
   VectorStoresResource& vector_stores() { return vector_stores_; }
   const VectorStoresResource& vector_stores() const { return vector_stores_; }
 
+  GradersResource& graders() { return graders_; }
+  const GradersResource& graders() const { return graders_; }
+
   AssistantsResource& assistants() { return assistants_; }
   const AssistantsResource& assistants() const { return assistants_; }
 
@@ -228,11 +238,14 @@ private:
   friend class FineTuningJobsResource;
   friend class FineTuningJobCheckpointsResource;
   friend class FineTuningResource;
+  friend class FineTuningAlphaGradersResource;
   friend class WebhooksResource;
   friend class ConversationsResource;
   friend class ConversationItemsResource;
   friend class BetaResource;
   friend class beta::RealtimeSessionsResource;
+  friend class beta::RealtimeTranscriptionSessionsResource;
+  friend class beta::BetaThreadsResource;
   friend class BatchesResource;
   friend class UploadsResource;
   friend class UploadPartsResource;
@@ -257,6 +270,7 @@ private:
   ImagesResource images_;
   AudioResource audio_;
   VectorStoresResource vector_stores_;
+  GradersResource graders_;
   AssistantsResource assistants_;
   ThreadsResource threads_;
   ThreadMessagesResource thread_messages_;

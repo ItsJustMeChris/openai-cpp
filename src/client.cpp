@@ -41,6 +41,17 @@ using json = nlohmann::json;
 constexpr std::chrono::milliseconds kMaxRetryAfter = std::chrono::milliseconds(60'000);
 constexpr const char* kDefaultBaseUrl = "https://api.openai.com/v1";
 
+const std::set<std::string> kAzureDeploymentEndpoints = {
+    "/completions",
+    "/chat/completions",
+    "/embeddings",
+    "/audio/transcriptions",
+    "/audio/translations",
+    "/audio/speech",
+    "/images/generations",
+    "/batches",
+    "/images/edits"};
+
 bool iequals(std::string_view lhs, std::string_view rhs) {
   return lhs.size() == rhs.size() &&
          std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), [](char a, char b) {
@@ -526,6 +537,7 @@ OpenAIClient::OpenAIClient(ClientOptions options,
       images_(*this),
       audio_(*this),
       vector_stores_(*this),
+      graders_(*this),
       assistants_(*this),
       threads_(*this),
       thread_messages_(*this),
@@ -540,7 +552,7 @@ OpenAIClient::OpenAIClient(ClientOptions options,
       beta_(*this),
       batches_(*this),
       uploads_(*this) {
-  if (options_.api_key.empty()) {
+  if (options_.api_key.empty() && !options_.api_key_provider) {
     if (auto env_api = utils::read_env("OPENAI_API_KEY")) {
       options_.api_key = *env_api;
     }
@@ -582,7 +594,7 @@ OpenAIClient::OpenAIClient(ClientOptions options,
     }
   }
 
-  if (options_.api_key.empty()) {
+  if (options_.api_key.empty() && !options_.api_key_provider) {
     throw OpenAIError("Missing API key. Provide ClientOptions.api_key or set the OPENAI_API_KEY environment variable.");
   }
 
@@ -622,10 +634,27 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
     idempotency_key = utils::uuid4();
   }
 
+  std::string request_path = path;
+  if (options_.azure_deployment_routing && iequals(method, "POST")) {
+    if (kAzureDeploymentEndpoints.count(path) > 0 && options_.base_url.find("/deployments/") == std::string::npos) {
+      std::string deployment = options_.azure_deployment_name.value_or("");
+      if (deployment.empty() && !body.empty()) {
+        if (auto parsed = utils::safe_json(body)) {
+          if (parsed->contains("model") && (*parsed)["model"].is_string()) {
+            deployment = (*parsed)["model"].get<std::string>();
+          }
+        }
+      }
+      if (!deployment.empty()) {
+        request_path = std::string("/deployments/") + deployment + path;
+      }
+    }
+  }
+
   auto build_request = [&](std::size_t retry_count) {
     HttpRequest http_request;
     http_request.method = method;
-    std::string url = build_url(options_.base_url, path);
+    std::string url = build_url(options_.base_url, request_path);
     json query_json = build_query_object(options_.default_query, options);
     utils::qs::StringifyOptions qs_options;
     qs_options.array_format = utils::qs::ArrayFormat::Brackets;
@@ -653,7 +682,19 @@ HttpResponse OpenAIClient::perform_request(const std::string& method,
     for (const auto& [key, value] : utils::platform_headers()) {
       headers[key] = value;
     }
-    headers["Authorization"] = std::string("Bearer ") + options_.api_key;
+    std::string auth_token;
+    if (options_.api_key_provider) {
+      auth_token = options_.api_key_provider();
+    } else {
+      auth_token = options_.api_key;
+    }
+    if (options_.use_bearer_auth) {
+      if (!auth_token.empty()) {
+        headers["Authorization"] = std::string("Bearer ") + auth_token;
+      }
+    } else if (options_.alternative_auth_header && !auth_token.empty()) {
+      headers[*options_.alternative_auth_header] = options_.alternative_auth_prefix + auth_token;
+    }
 
     if (options_.organization) {
       headers["OpenAI-Organization"] = *options_.organization;

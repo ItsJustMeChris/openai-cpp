@@ -61,7 +61,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Videos
 - [x] Webhooks
 - [ ] Beta features (`beta`, `graders`, `realtime`, etc.)
-- [ ] Azure OpenAI compatibility layer
+- [x] Azure OpenAI compatibility layer
 
 ## Tooling & Tests
 - [ ] Unit tests with mock HTTP client

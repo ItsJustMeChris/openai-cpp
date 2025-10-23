@@ -42,8 +42,12 @@ add_executable(openai-cpp-tests
     ${CMAKE_CURRENT_LIST_DIR}/webhooks_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/conversations_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/moderations_extra_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/azure_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/beta_realtime_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/beta_realtime_transcription_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/beta_threads_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/uploads_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/fine_tuning_graders_test.cpp
 )
 
 target_link_libraries(openai-cpp-tests PRIVATE

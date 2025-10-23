@@ -2,6 +2,12 @@
 
 #include "openai/client.hpp"
 #include "openai/error.hpp"
+#include "openai/assistants.hpp"
+#include "openai/assistant_stream.hpp"
+#include "openai/messages.hpp"
+#include "openai/run_steps.hpp"
+#include "openai/runs.hpp"
+#include "openai/threads.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -134,6 +140,109 @@ beta::RealtimeSession parse_session(const json& payload) {
   return session;
 }
 
+json transcription_session_create_body(const beta::RealtimeTranscriptionSessionCreateParams& params) {
+  json body = json::object();
+  if (params.client_secret) {
+    json client_secret = json::object();
+    if (params.client_secret->expires_at) {
+      json expires = json::object();
+      if (params.client_secret->expires_at->anchor) {
+        expires["anchor"] = *params.client_secret->expires_at->anchor;
+      }
+      if (params.client_secret->expires_at->seconds) {
+        expires["seconds"] = *params.client_secret->expires_at->seconds;
+      }
+      if (!expires.empty()) {
+        client_secret["expires_at"] = std::move(expires);
+      }
+    }
+    if (!client_secret.empty()) {
+      body["client_secret"] = std::move(client_secret);
+    }
+  }
+  if (params.include && !params.include->empty()) {
+    body["include"] = *params.include;
+  }
+  if (params.input_audio_format) body["input_audio_format"] = *params.input_audio_format;
+  if (params.input_audio_noise_reduction) {
+    json nr = json::object();
+    if (params.input_audio_noise_reduction->type) nr["type"] = *params.input_audio_noise_reduction->type;
+    body["input_audio_noise_reduction"] = std::move(nr);
+  }
+  if (params.input_audio_transcription) {
+    json transcription = json::object();
+    if (params.input_audio_transcription->language) transcription["language"] = *params.input_audio_transcription->language;
+    if (params.input_audio_transcription->model) transcription["model"] = *params.input_audio_transcription->model;
+    if (params.input_audio_transcription->prompt) transcription["prompt"] = *params.input_audio_transcription->prompt;
+    body["input_audio_transcription"] = std::move(transcription);
+  }
+  if (params.modalities) body["modalities"] = *params.modalities;
+  if (params.turn_detection) {
+    json detection = json::object();
+    if (params.turn_detection->create_response) detection["create_response"] = *params.turn_detection->create_response;
+    if (params.turn_detection->eagerness) detection["eagerness"] = *params.turn_detection->eagerness;
+    if (params.turn_detection->interrupt_response) detection["interrupt_response"] = *params.turn_detection->interrupt_response;
+    if (params.turn_detection->prefix_padding_ms) detection["prefix_padding_ms"] = *params.turn_detection->prefix_padding_ms;
+    if (params.turn_detection->silence_duration_ms) detection["silence_duration_ms"] = *params.turn_detection->silence_duration_ms;
+    if (params.turn_detection->threshold) detection["threshold"] = *params.turn_detection->threshold;
+    if (params.turn_detection->type) detection["type"] = *params.turn_detection->type;
+    if (!detection.empty()) body["turn_detection"] = std::move(detection);
+  }
+  return body;
+}
+
+beta::RealtimeTranscriptionSession parse_transcription_session(const json& payload) {
+  beta::RealtimeTranscriptionSession session;
+  session.raw = payload;
+  if (payload.contains("client_secret") && payload.at("client_secret").is_object()) {
+    const auto& cs_json = payload.at("client_secret");
+    beta::RealtimeTranscriptionSessionClientSecret secret;
+    secret.expires_at = cs_json.value("expires_at", 0);
+    if (cs_json.contains("value") && cs_json.at("value").is_string()) {
+      secret.value = cs_json.at("value").get<std::string>();
+    }
+    session.client_secret = secret;
+  }
+  if (payload.contains("input_audio_format") && payload.at("input_audio_format").is_string()) {
+    session.input_audio_format = payload.at("input_audio_format").get<std::string>();
+  }
+  if (payload.contains("input_audio_transcription") && payload.at("input_audio_transcription").is_object()) {
+    const auto& transcription_json = payload.at("input_audio_transcription");
+    beta::RealtimeTranscriptionSessionInputAudioTranscription transcription;
+    if (transcription_json.contains("language") && transcription_json.at("language").is_string()) {
+      transcription.language = transcription_json.at("language").get<std::string>();
+    }
+    if (transcription_json.contains("model") && transcription_json.at("model").is_string()) {
+      transcription.model = transcription_json.at("model").get<std::string>();
+    }
+    if (transcription_json.contains("prompt") && transcription_json.at("prompt").is_string()) {
+      transcription.prompt = transcription_json.at("prompt").get<std::string>();
+    }
+    session.input_audio_transcription = transcription;
+  }
+  if (payload.contains("modalities") && payload.at("modalities").is_array()) {
+    session.modalities = payload.at("modalities").get<std::vector<std::string>>();
+  }
+  if (payload.contains("turn_detection") && payload.at("turn_detection").is_object()) {
+    const auto& detection_json = payload.at("turn_detection");
+    beta::RealtimeTranscriptionSessionTurnDetection detection;
+    if (detection_json.contains("prefix_padding_ms") && detection_json.at("prefix_padding_ms").is_number_integer()) {
+      detection.prefix_padding_ms = detection_json.at("prefix_padding_ms").get<int>();
+    }
+    if (detection_json.contains("silence_duration_ms") && detection_json.at("silence_duration_ms").is_number_integer()) {
+      detection.silence_duration_ms = detection_json.at("silence_duration_ms").get<int>();
+    }
+    if (detection_json.contains("threshold") && detection_json.at("threshold").is_number()) {
+      detection.threshold = detection_json.at("threshold").get<double>();
+    }
+    if (detection_json.contains("type") && detection_json.at("type").is_string()) {
+      detection.type = detection_json.at("type").get<std::string>();
+    }
+    session.turn_detection = detection;
+  }
+  return session;
+}
+
 }  // namespace
 
 beta::RealtimeSession beta::RealtimeSessionsResource::create(const RealtimeSessionCreateParams& params) const {
@@ -157,5 +266,139 @@ beta::RealtimeSession beta::RealtimeSessionsResource::create() const {
   return create(RealtimeSessionCreateParams{});
 }
 
-}  // namespace openai
+beta::RealtimeTranscriptionSession beta::RealtimeTranscriptionSessionsResource::create(
+    const RealtimeTranscriptionSessionCreateParams& params) const {
+  return create(params, RequestOptions{});
+}
 
+beta::RealtimeTranscriptionSession beta::RealtimeTranscriptionSessionsResource::create(
+    const RealtimeTranscriptionSessionCreateParams& params,
+    const RequestOptions& options) const {
+  auto body = transcription_session_create_body(params).dump();
+  RequestOptions request_options = options;
+  request_options.headers["OpenAI-Beta"] = "assistants=v2";
+  auto response =
+      client_.perform_request("POST", "/realtime/transcription_sessions", body, request_options);
+  try {
+    return parse_transcription_session(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse realtime transcription session response: ") + ex.what());
+  }
+}
+
+beta::RealtimeTranscriptionSession beta::RealtimeTranscriptionSessionsResource::create() const {
+  return create(RealtimeTranscriptionSessionCreateParams{});
+}
+
+namespace beta {
+
+Thread BetaThreadsResource::create(const ThreadCreateRequest& request) const {
+  return client_.threads().create(request);
+}
+
+Thread BetaThreadsResource::create(const ThreadCreateRequest& request, const RequestOptions& options) const {
+  return client_.threads().create(request, options);
+}
+
+Thread BetaThreadsResource::retrieve(const std::string& thread_id) const {
+  return client_.threads().retrieve(thread_id);
+}
+
+Thread BetaThreadsResource::retrieve(const std::string& thread_id, const RequestOptions& options) const {
+  return client_.threads().retrieve(thread_id, options);
+}
+
+Thread BetaThreadsResource::update(const std::string& thread_id, const ThreadUpdateRequest& request) const {
+  return client_.threads().update(thread_id, request);
+}
+
+Thread BetaThreadsResource::update(const std::string& thread_id,
+                                   const ThreadUpdateRequest& request,
+                                   const RequestOptions& options) const {
+  return client_.threads().update(thread_id, request, options);
+}
+
+ThreadDeleteResponse BetaThreadsResource::remove(const std::string& thread_id) const {
+  return client_.threads().remove(thread_id);
+}
+
+ThreadDeleteResponse BetaThreadsResource::remove(const std::string& thread_id, const RequestOptions& options) const {
+  return client_.threads().remove(thread_id, options);
+}
+
+Run BetaThreadsResource::create_and_run(const ThreadCreateAndRunRequest& request) const {
+  return client_.threads().create_and_run(request);
+}
+
+Run BetaThreadsResource::create_and_run(const ThreadCreateAndRunRequest& request,
+                                        const RequestOptions& options) const {
+  return client_.threads().create_and_run(request, options);
+}
+
+std::vector<AssistantStreamEvent> BetaThreadsResource::create_and_run_stream(
+    const ThreadCreateAndRunRequest& request) const {
+  return client_.threads().create_and_run_stream(request);
+}
+
+std::vector<AssistantStreamEvent> BetaThreadsResource::create_and_run_stream(
+    const ThreadCreateAndRunRequest& request,
+    const RequestOptions& options) const {
+  return client_.threads().create_and_run_stream(request, options);
+}
+
+AssistantStreamSnapshot BetaThreadsResource::create_and_run_stream_snapshot(
+    const ThreadCreateAndRunRequest& request) const {
+  return client_.threads().create_and_run_stream_snapshot(request);
+}
+
+AssistantStreamSnapshot BetaThreadsResource::create_and_run_stream_snapshot(
+    const ThreadCreateAndRunRequest& request,
+    const RequestOptions& options) const {
+  return client_.threads().create_and_run_stream_snapshot(request, options);
+}
+
+Run BetaThreadsResource::create_and_run_poll(const ThreadCreateAndRunRequest& request) const {
+  return client_.threads().create_and_run_poll(request);
+}
+
+Run BetaThreadsResource::create_and_run_poll(const ThreadCreateAndRunRequest& request,
+                                             const RequestOptions& options,
+                                             std::chrono::milliseconds poll_interval) const {
+  return client_.threads().create_and_run_poll(request, options, poll_interval);
+}
+
+ThreadMessagesResource& BetaThreadsResource::messages() {
+  return client_.thread_messages();
+}
+
+const ThreadMessagesResource& BetaThreadsResource::messages() const {
+  return client_.thread_messages();
+}
+
+RunsResource& BetaThreadsResource::runs() {
+  return client_.runs();
+}
+
+const RunsResource& BetaThreadsResource::runs() const {
+  return client_.runs();
+}
+
+RunStepsResource& BetaThreadsResource::run_steps() {
+  return client_.run_steps();
+}
+
+const RunStepsResource& BetaThreadsResource::run_steps() const {
+  return client_.run_steps();
+}
+
+}  // namespace beta
+
+AssistantsResource& BetaResource::assistants() {
+  return client_.assistants();
+}
+
+const AssistantsResource& BetaResource::assistants() const {
+  return client_.assistants();
+}
+
+}  // namespace openai

@@ -9,6 +9,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "openai/graders.hpp"
+
 namespace openai {
 
 struct RequestOptions;
@@ -177,6 +179,95 @@ struct FineTuningJobEventsList {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct GraderRunMetadataErrors {
+  bool formula_parse_error = false;
+  bool invalid_variable_error = false;
+  bool model_grader_parse_error = false;
+  bool model_grader_refusal_error = false;
+  bool model_grader_server_error = false;
+  std::optional<std::string> model_grader_server_error_details;
+  bool other_error = false;
+  bool python_grader_runtime_error = false;
+  std::optional<std::string> python_grader_runtime_error_details;
+  bool python_grader_server_error = false;
+  std::optional<std::string> python_grader_server_error_type;
+  bool sample_parse_error = false;
+  bool truncated_observation_error = false;
+  bool unresponsive_reward_error = false;
+};
+
+struct GraderRunMetadata {
+  GraderRunMetadataErrors errors;
+  double execution_time = 0.0;
+  std::string name;
+  std::optional<std::string> sampled_model_name;
+  std::map<std::string, nlohmann::json> scores;
+  std::optional<double> token_usage;
+  std::string type;
+};
+
+struct GraderRunResponse {
+  GraderRunMetadata metadata;
+  std::map<std::string, nlohmann::json> model_grader_token_usage_per_model;
+  double reward = 0.0;
+  std::map<std::string, nlohmann::json> sub_rewards;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct GraderValidateResponse {
+  std::optional<std::variant<graders::StringCheckGrader,
+                             graders::TextSimilarityGrader,
+                             graders::PythonGrader,
+                             graders::ScoreModelGrader,
+                             graders::MultiGrader,
+                             graders::LabelModelGrader>> grader;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct GraderRunParams {
+  std::variant<graders::StringCheckGrader,
+               graders::TextSimilarityGrader,
+               graders::PythonGrader,
+               graders::ScoreModelGrader,
+               graders::MultiGrader> grader;
+  std::string model_sample;
+  std::optional<nlohmann::json> item;
+};
+
+struct GraderValidateParams {
+  std::variant<graders::StringCheckGrader,
+               graders::TextSimilarityGrader,
+               graders::PythonGrader,
+               graders::ScoreModelGrader,
+               graders::MultiGrader,
+               graders::LabelModelGrader> grader;
+};
+
+class FineTuningAlphaGradersResource {
+public:
+  explicit FineTuningAlphaGradersResource(OpenAIClient& client) : client_(client) {}
+
+  GraderRunResponse run(const GraderRunParams& params) const;
+  GraderRunResponse run(const GraderRunParams& params, const RequestOptions& options) const;
+
+  GraderValidateResponse validate(const GraderValidateParams& params) const;
+  GraderValidateResponse validate(const GraderValidateParams& params, const RequestOptions& options) const;
+
+private:
+  OpenAIClient& client_;
+};
+
+class FineTuningAlphaResource {
+public:
+  explicit FineTuningAlphaResource(OpenAIClient& client) : graders_(client) {}
+
+  FineTuningAlphaGradersResource& graders() { return graders_; }
+  const FineTuningAlphaGradersResource& graders() const { return graders_; }
+
+private:
+  FineTuningAlphaGradersResource graders_;
+};
+
 struct FineTuningJobCheckpointMetrics {
   std::optional<double> full_valid_loss;
   std::optional<double> full_valid_mean_token_accuracy;
@@ -279,14 +370,18 @@ private:
 
 class FineTuningResource {
 public:
-  explicit FineTuningResource(OpenAIClient& client) : client_(client), jobs_(client) {}
+  explicit FineTuningResource(OpenAIClient& client) : client_(client), jobs_(client), alpha_(client) {}
 
   FineTuningJobsResource& jobs() { return jobs_; }
   const FineTuningJobsResource& jobs() const { return jobs_; }
 
+  FineTuningAlphaResource& alpha() { return alpha_; }
+  const FineTuningAlphaResource& alpha() const { return alpha_; }
+
 private:
   OpenAIClient& client_;
   FineTuningJobsResource jobs_;
+  FineTuningAlphaResource alpha_;
 };
 
 }  // namespace openai

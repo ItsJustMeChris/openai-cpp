@@ -34,6 +34,7 @@ add_library(openai-cpp
     src/webhooks.cpp
     src/conversations.cpp
     src/beta.cpp
+    src/azure.cpp
     src/vector_stores.cpp
     src/batches.cpp
     src/assistants.cpp

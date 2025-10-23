@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <type_traits>
 
 namespace openai {
 namespace {
@@ -270,6 +271,327 @@ FineTuningJob parse_job(const json& payload) {
     job.method = std::move(method);
   }
   return job;
+}
+
+json label_model_input_to_json(const graders::LabelModelGraderInput& input) {
+  json payload = json::object();
+  payload["role"] = input.role;
+  payload["content"] = input.content;
+  if (input.type) payload["type"] = *input.type;
+  return payload;
+}
+
+json score_model_input_to_json(const graders::ScoreModelGraderInput& input) {
+  json payload = json::object();
+  payload["content"] = input.content;
+  payload["role"] = input.role;
+  if (input.type) payload["type"] = *input.type;
+  return payload;
+}
+
+json string_check_to_json(const graders::StringCheckGrader& grader) {
+  json payload = json::object();
+  payload["input"] = grader.input;
+  payload["name"] = grader.name;
+  payload["operation"] = grader.operation;
+  payload["reference"] = grader.reference;
+  payload["type"] = grader.type;
+  return payload;
+}
+
+json text_similarity_to_json(const graders::TextSimilarityGrader& grader) {
+  json payload = json::object();
+  payload["evaluation_metric"] = grader.evaluation_metric;
+  payload["input"] = grader.input;
+  payload["name"] = grader.name;
+  payload["reference"] = grader.reference;
+  payload["type"] = grader.type;
+  return payload;
+}
+
+json python_grader_to_json(const graders::PythonGrader& grader) {
+  json payload = json::object();
+  payload["name"] = grader.name;
+  payload["source"] = grader.source;
+  payload["type"] = grader.type;
+  if (grader.image_tag) payload["image_tag"] = *grader.image_tag;
+  return payload;
+}
+
+json score_model_to_json(const graders::ScoreModelGrader& grader) {
+  json payload = json::object();
+  payload["input"] = json::array();
+  for (const auto& item : grader.input) {
+    payload["input"].push_back(score_model_input_to_json(item));
+  }
+  payload["model"] = grader.model;
+  payload["name"] = grader.name;
+  payload["type"] = grader.type;
+  if (grader.range) payload["range"] = *grader.range;
+  if (grader.sampling_params) {
+    json sampling = json::object();
+    if (grader.sampling_params->max_tokens) sampling["max_tokens"] = *grader.sampling_params->max_tokens;
+    if (grader.sampling_params->temperature) sampling["temperature"] = *grader.sampling_params->temperature;
+    if (grader.sampling_params->top_p) sampling["top_p"] = *grader.sampling_params->top_p;
+    payload["sampling_params"] = std::move(sampling);
+  }
+  return payload;
+}
+
+json label_model_to_json(const graders::LabelModelGrader& grader) {
+  json payload = json::object();
+  json inputs = json::array();
+  for (const auto& item : grader.input) {
+    inputs.push_back(label_model_input_to_json(item));
+  }
+  payload["input"] = std::move(inputs);
+  payload["labels"] = grader.labels;
+  payload["model"] = grader.model;
+  payload["name"] = grader.name;
+  payload["passing_labels"] = grader.passing_labels;
+  payload["type"] = grader.type;
+  return payload;
+}
+
+json multi_grader_to_json(const graders::MultiGrader& grader);
+
+template <typename Variant>
+json graders_variant_to_json(const Variant& grader_variant) {
+  return std::visit([](const auto& value) -> json {
+    using T = std::decay_t<decltype(value)>;
+    if constexpr (std::is_same_v<T, graders::StringCheckGrader>) {
+      return string_check_to_json(value);
+    } else if constexpr (std::is_same_v<T, graders::TextSimilarityGrader>) {
+      return text_similarity_to_json(value);
+    } else if constexpr (std::is_same_v<T, graders::PythonGrader>) {
+      return python_grader_to_json(value);
+    } else if constexpr (std::is_same_v<T, graders::ScoreModelGrader>) {
+      return score_model_to_json(value);
+    } else if constexpr (std::is_same_v<T, graders::MultiGrader>) {
+      return multi_grader_to_json(value);
+    } else {
+      return label_model_to_json(value);
+    }
+  }, grader_variant);
+}
+
+json multi_grader_to_json(const graders::MultiGrader& grader) {
+  json payload = json::object();
+  payload["calculate_output"] = grader.calculate_output;
+  payload["graders"] = graders_variant_to_json(grader.graders);
+  payload["name"] = grader.name;
+  payload["type"] = grader.type;
+  return payload;
+}
+
+graders::StringCheckGrader parse_string_check_grader(const json& payload) {
+  graders::StringCheckGrader grader;
+  grader.input = payload.value("input", "");
+  grader.name = payload.value("name", "");
+  grader.operation = payload.value("operation", "");
+  grader.reference = payload.value("reference", "");
+  grader.type = payload.value("type", "string_check");
+  return grader;
+}
+
+graders::TextSimilarityGrader parse_text_similarity_grader(const json& payload) {
+  graders::TextSimilarityGrader grader;
+  grader.evaluation_metric = payload.value("evaluation_metric", "");
+  grader.input = payload.value("input", "");
+  grader.name = payload.value("name", "");
+  grader.reference = payload.value("reference", "");
+  grader.type = payload.value("type", "text_similarity");
+  return grader;
+}
+
+graders::PythonGrader parse_python_grader(const json& payload) {
+  graders::PythonGrader grader;
+  grader.name = payload.value("name", "");
+  grader.source = payload.value("source", "");
+  grader.type = payload.value("type", "python");
+  if (payload.contains("image_tag") && payload.at("image_tag").is_string()) {
+    grader.image_tag = payload.at("image_tag").get<std::string>();
+  }
+  return grader;
+}
+
+graders::ScoreModelGraderInput parse_score_model_input(const json& payload) {
+  graders::ScoreModelGraderInput input;
+  if (payload.contains("content")) input.content = payload.at("content");
+  input.role = payload.value("role", "");
+  if (payload.contains("type") && payload.at("type").is_string()) input.type = payload.at("type").get<std::string>();
+  return input;
+}
+
+graders::ScoreModelGrader parse_score_model_grader(const json& payload) {
+  graders::ScoreModelGrader grader;
+  grader.type = payload.value("type", "score_model");
+  grader.model = payload.value("model", "");
+  grader.name = payload.value("name", "");
+  if (payload.contains("input") && payload.at("input").is_array()) {
+    for (const auto& item : payload.at("input")) {
+      grader.input.push_back(parse_score_model_input(item));
+    }
+  }
+  if (payload.contains("range") && payload.at("range").is_array()) {
+    grader.range = payload.at("range").get<std::vector<double>>();
+  }
+  if (payload.contains("sampling_params") && payload.at("sampling_params").is_object()) {
+    graders::ScoreModelGraderSamplingParams params;
+    const auto& sampling = payload.at("sampling_params");
+    if (sampling.contains("max_tokens") && sampling.at("max_tokens").is_number_integer()) {
+      params.max_tokens = sampling.at("max_tokens").get<int>();
+    }
+    if (sampling.contains("temperature") && sampling.at("temperature").is_number()) {
+      params.temperature = sampling.at("temperature").get<double>();
+    }
+    if (sampling.contains("top_p") && sampling.at("top_p").is_number()) {
+      params.top_p = sampling.at("top_p").get<double>();
+    }
+    grader.sampling_params = params;
+  }
+  return grader;
+}
+
+graders::LabelModelGrader parse_label_model_grader(const json& payload) {
+  graders::LabelModelGrader grader;
+  grader.type = payload.value("type", "label_model");
+  grader.model = payload.value("model", "");
+  grader.name = payload.value("name", "");
+  if (payload.contains("input") && payload.at("input").is_array()) {
+    for (const auto& item : payload.at("input")) {
+      graders::LabelModelGraderInput input;
+      input.content = item.contains("content") ? item.at("content") : json::array();
+      input.role = item.value("role", "");
+      if (item.contains("type") && item.at("type").is_string()) input.type = item.at("type").get<std::string>();
+      grader.input.push_back(std::move(input));
+    }
+  }
+  if (payload.contains("labels") && payload.at("labels").is_array()) {
+    grader.labels = payload.at("labels").get<std::vector<std::string>>();
+  }
+  if (payload.contains("passing_labels") && payload.at("passing_labels").is_array()) {
+    grader.passing_labels = payload.at("passing_labels").get<std::vector<std::string>>();
+  }
+  return grader;
+}
+
+std::variant<graders::StringCheckGrader,
+             graders::TextSimilarityGrader,
+             graders::PythonGrader,
+             graders::ScoreModelGrader,
+             graders::LabelModelGrader> parse_nested_grader_variant(const json& payload) {
+  const std::string type = payload.value("type", "");
+  if (type == "string_check") return parse_string_check_grader(payload);
+  if (type == "text_similarity") return parse_text_similarity_grader(payload);
+  if (type == "python") return parse_python_grader(payload);
+  if (type == "score_model") return parse_score_model_grader(payload);
+  return parse_label_model_grader(payload);
+}
+
+graders::MultiGrader parse_multi_grader(const json& payload);
+
+std::variant<graders::StringCheckGrader,
+             graders::TextSimilarityGrader,
+             graders::PythonGrader,
+             graders::ScoreModelGrader,
+             graders::MultiGrader,
+             graders::LabelModelGrader> parse_grader_variant(const json& payload) {
+  const std::string type = payload.value("type", "");
+  if (type == "string_check") return parse_string_check_grader(payload);
+  if (type == "text_similarity") return parse_text_similarity_grader(payload);
+  if (type == "python") return parse_python_grader(payload);
+  if (type == "score_model") return parse_score_model_grader(payload);
+  if (type == "multi") return parse_multi_grader(payload);
+  if (type == "label_model") return parse_label_model_grader(payload);
+  return parse_string_check_grader(payload);
+}
+
+graders::MultiGrader parse_multi_grader(const json& payload) {
+  graders::MultiGrader grader;
+  grader.type = payload.value("type", "multi");
+  grader.calculate_output = payload.value("calculate_output", "");
+  grader.name = payload.value("name", "");
+  if (payload.contains("graders") && payload.at("graders").is_object()) {
+    grader.graders = parse_nested_grader_variant(payload.at("graders"));
+  }
+  return grader;
+}
+
+GraderRunMetadataErrors parse_grader_run_errors(const json& payload) {
+  GraderRunMetadataErrors errors;
+  errors.formula_parse_error = payload.value("formula_parse_error", false);
+  errors.invalid_variable_error = payload.value("invalid_variable_error", false);
+  errors.model_grader_parse_error = payload.value("model_grader_parse_error", false);
+  errors.model_grader_refusal_error = payload.value("model_grader_refusal_error", false);
+  errors.model_grader_server_error = payload.value("model_grader_server_error", false);
+  if (payload.contains("model_grader_server_error_details") && !payload.at("model_grader_server_error_details").is_null()) {
+    errors.model_grader_server_error_details = payload.at("model_grader_server_error_details").get<std::string>();
+  }
+  errors.other_error = payload.value("other_error", false);
+  errors.python_grader_runtime_error = payload.value("python_grader_runtime_error", false);
+  if (payload.contains("python_grader_runtime_error_details") && !payload.at("python_grader_runtime_error_details").is_null()) {
+    errors.python_grader_runtime_error_details = payload.at("python_grader_runtime_error_details").get<std::string>();
+  }
+  errors.python_grader_server_error = payload.value("python_grader_server_error", false);
+  if (payload.contains("python_grader_server_error_type") && !payload.at("python_grader_server_error_type").is_null()) {
+    errors.python_grader_server_error_type = payload.at("python_grader_server_error_type").get<std::string>();
+  }
+  errors.sample_parse_error = payload.value("sample_parse_error", false);
+  errors.truncated_observation_error = payload.value("truncated_observation_error", false);
+  errors.unresponsive_reward_error = payload.value("unresponsive_reward_error", false);
+  return errors;
+}
+
+GraderRunMetadata parse_grader_run_metadata(const json& payload) {
+  GraderRunMetadata metadata;
+  metadata.execution_time = payload.value("execution_time", 0.0);
+  metadata.name = payload.value("name", "");
+  if (payload.contains("sampled_model_name") && !payload.at("sampled_model_name").is_null()) {
+    metadata.sampled_model_name = payload.at("sampled_model_name").get<std::string>();
+  }
+  if (payload.contains("scores") && payload.at("scores").is_object()) {
+    for (const auto& item : payload.at("scores").items()) {
+      metadata.scores[item.key()] = item.value();
+    }
+  }
+  if (payload.contains("token_usage") && !payload.at("token_usage").is_null()) {
+    metadata.token_usage = payload.at("token_usage").get<double>();
+  }
+  metadata.type = payload.value("type", "");
+  if (payload.contains("errors") && payload.at("errors").is_object()) {
+    metadata.errors = parse_grader_run_errors(payload.at("errors"));
+  }
+  return metadata;
+}
+
+GraderRunResponse parse_grader_run_response(const json& payload) {
+  GraderRunResponse response;
+  response.raw = payload;
+  if (payload.contains("metadata") && payload.at("metadata").is_object()) {
+    response.metadata = parse_grader_run_metadata(payload.at("metadata"));
+  }
+  response.reward = payload.value("reward", 0.0);
+  if (payload.contains("model_grader_token_usage_per_model") && payload.at("model_grader_token_usage_per_model").is_object()) {
+    for (const auto& item : payload.at("model_grader_token_usage_per_model").items()) {
+      response.model_grader_token_usage_per_model[item.key()] = item.value();
+    }
+  }
+  if (payload.contains("sub_rewards") && payload.at("sub_rewards").is_object()) {
+    for (const auto& item : payload.at("sub_rewards").items()) {
+      response.sub_rewards[item.key()] = item.value();
+    }
+  }
+  return response;
+}
+
+GraderValidateResponse parse_grader_validate_response(const json& payload) {
+  GraderValidateResponse response;
+  response.raw = payload;
+  if (payload.contains("grader") && payload.at("grader").is_object()) {
+    response.grader = parse_grader_variant(payload.at("grader"));
+  }
+  return response;
 }
 
 FineTuningJobEvent parse_job_event(const json& payload) {
@@ -669,6 +991,41 @@ CursorPage<FineTuningJobEvent> FineTuningJobsResource::list_events_page(const st
 
 CursorPage<FineTuningJobEvent> FineTuningJobsResource::list_events_page(const std::string& job_id) const {
   return list_events_page(job_id, JobListEventsParams{});
+}
+
+GraderRunResponse FineTuningAlphaGradersResource::run(const GraderRunParams& params) const {
+  return run(params, RequestOptions{});
+}
+
+GraderRunResponse FineTuningAlphaGradersResource::run(const GraderRunParams& params,
+                                                      const RequestOptions& options) const {
+  json body = json::object();
+  body["grader"] = graders_variant_to_json(params.grader);
+  body["model_sample"] = params.model_sample;
+  if (params.item) body["item"] = *params.item;
+
+  auto response = client_.perform_request("POST", "/fine_tuning/alpha/graders/run", body.dump(), options);
+  try {
+    return parse_grader_run_response(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse grader run response: ") + ex.what());
+  }
+}
+
+GraderValidateResponse FineTuningAlphaGradersResource::validate(const GraderValidateParams& params) const {
+  return validate(params, RequestOptions{});
+}
+
+GraderValidateResponse FineTuningAlphaGradersResource::validate(const GraderValidateParams& params,
+                                                                const RequestOptions& options) const {
+  json body = json::object();
+  body["grader"] = graders_variant_to_json(params.grader);
+  auto response = client_.perform_request("POST", "/fine_tuning/alpha/graders/validate", body.dump(), options);
+  try {
+    return parse_grader_validate_response(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse grader validate response: ") + ex.what());
+  }
 }
 
 FineTuningJobCheckpointList FineTuningJobCheckpointsResource::list(const std::string& job_id,
