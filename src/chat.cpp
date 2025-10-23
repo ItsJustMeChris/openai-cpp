@@ -2,10 +2,12 @@
 
 #include "openai/client.hpp"
 #include "openai/error.hpp"
+#include "openai/pagination.hpp"
 #include "openai/streaming.hpp"
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <stdexcept>
 #include <utility>
 
@@ -13,6 +15,8 @@ namespace openai {
 namespace {
 
 using json = nlohmann::json;
+
+constexpr const char* kChatCompletionsPath = "/chat/completions";
 
 json message_content_to_json(const ChatMessageContent& content) {
   json block = json::object();
@@ -37,6 +41,12 @@ json message_content_to_json(const ChatMessageContent& content) {
       block["type"] = "input_audio";
       if (!content.audio_data.empty()) block["audio"] = { {"data", content.audio_data}, {"format", content.audio_format} };
       break;
+    case ChatMessageContent::Type::Refusal:
+      block["type"] = "refusal";
+      if (!content.refusal_text.empty()) {
+        block["refusal"] = content.refusal_text;
+      }
+      break;
     case ChatMessageContent::Type::Raw:
       block = content.raw.is_null() ? json::object() : content.raw;
       break;
@@ -49,14 +59,51 @@ json message_content_to_json(const ChatMessageContent& content) {
   return block;
 }
 
+json metadata_to_json(const std::map<std::string, std::string>& metadata) {
+  json object = json::object();
+  for (const auto& item : metadata) {
+    object[item.first] = item.second;
+  }
+  return object;
+}
+
+void apply_list_params(const ChatCompletionListParams& params, RequestOptions& options) {
+  if (params.limit) options.query_params["limit"] = std::to_string(*params.limit);
+  if (params.order) options.query_params["order"] = *params.order;
+  if (params.after) options.query_params["after"] = *params.after;
+  if (params.before) options.query_params["before"] = *params.before;
+  if (params.model) options.query_params["model"] = *params.model;
+  if (params.metadata) {
+    json query = options.query.value_or(json::object());
+    if (!query.is_object()) {
+      query = json::object();
+    }
+    query["metadata"] = metadata_to_json(*params.metadata);
+    options.query = std::move(query);
+  }
+}
+
+void apply_message_list_params(const ChatCompletionMessageListParams& params, RequestOptions& options) {
+  if (params.limit) options.query_params["limit"] = std::to_string(*params.limit);
+  if (params.order) options.query_params["order"] = *params.order;
+  if (params.after) options.query_params["after"] = *params.after;
+  if (params.before) options.query_params["before"] = *params.before;
+}
+
 json message_to_json(const ChatMessage& message) {
   json result;
   result["role"] = message.role;
   if (message.name) {
     result["name"] = *message.name;
   }
+  if (message.tool_call_id) {
+    result["tool_call_id"] = *message.tool_call_id;
+  }
   if (!message.metadata.empty()) {
     result["metadata"] = message.metadata;
+  }
+  if (message.refusal) {
+    result["refusal"] = *message.refusal;
   }
 
   if (message.content.size() == 1 && message.content.front().type == ChatMessageContent::Type::Text &&
@@ -116,6 +163,9 @@ ChatMessageContent parse_message_content(const json& payload) {
     } else if (payload["text"].is_object()) {
       content.text = payload["text"].value("content", payload["text"].value("value", ""));
     }
+  } else if (type == "refusal") {
+    content.type = ChatMessageContent::Type::Refusal;
+    content.refusal_text = payload.value("refusal", "");
   } else if (type == "input_image" || type == "image_url") {
     content.type = ChatMessageContent::Type::Image;
     content.image_url = payload.value("image_url", "");
@@ -144,6 +194,12 @@ ChatMessage parse_message(const json& payload) {
   message.raw = payload;
 
   message.role = payload.value("role", "");
+  if (payload.contains("id") && payload["id"].is_string()) {
+    message.id = payload["id"].get<std::string>();
+  }
+  if (payload.contains("tool_call_id") && payload["tool_call_id"].is_string()) {
+    message.tool_call_id = payload["tool_call_id"].get<std::string>();
+  }
   if (payload.contains("name") && payload["name"].is_string()) {
     message.name = payload["name"].get<std::string>();
   }
@@ -173,6 +229,9 @@ ChatMessage parse_message(const json& payload) {
     for (const auto& call_json : payload.at("tool_calls")) {
       message.tool_calls.push_back(parse_tool_call(call_json));
     }
+  }
+  if (payload.contains("refusal") && payload["refusal"].is_string()) {
+    message.refusal = payload["refusal"].get<std::string>();
   }
 
   return message;
@@ -213,6 +272,16 @@ ChatCompletion parse_chat_completion(const json& payload) {
   if (payload.contains("system_fingerprint") && payload["system_fingerprint"].is_string()) {
     completion.system_fingerprint = payload["system_fingerprint"].get<std::string>();
   }
+  if (payload.contains("service_tier") && payload["service_tier"].is_string()) {
+    completion.service_tier = payload["service_tier"].get<std::string>();
+  }
+  if (payload.contains("metadata") && payload["metadata"].is_object()) {
+    for (auto it = payload["metadata"].begin(); it != payload["metadata"].end(); ++it) {
+      if (it.value().is_string()) {
+        completion.metadata[it.key()] = it.value().get<std::string>();
+      }
+    }
+  }
 
   if (payload.contains("choices")) {
     for (const auto& choice_json : payload.at("choices")) {
@@ -225,6 +294,66 @@ ChatCompletion parse_chat_completion(const json& payload) {
   }
 
   return completion;
+}
+
+ChatCompletionList parse_chat_completion_list(const json& payload) {
+  ChatCompletionList list;
+  list.raw = payload;
+  if (payload.contains("data") && payload["data"].is_array()) {
+    for (const auto& item : payload.at("data")) {
+      list.data.push_back(parse_chat_completion(item));
+    }
+  }
+  list.has_more = payload.value("has_more", false);
+  if (payload.contains("next_cursor") && payload["next_cursor"].is_string()) {
+    list.next_cursor = payload["next_cursor"].get<std::string>();
+  }
+  if (!list.next_cursor && payload.contains("last_id") && payload["last_id"].is_string()) {
+    list.next_cursor = payload["last_id"].get<std::string>();
+  }
+  if (!list.next_cursor && !list.data.empty()) {
+    list.next_cursor = list.data.back().id;
+  }
+  return list;
+}
+
+ChatCompletionDeleted parse_chat_completion_deleted(const json& payload) {
+  ChatCompletionDeleted deleted;
+  deleted.raw = payload;
+  deleted.id = payload.value("id", "");
+  deleted.deleted = payload.value("deleted", false);
+  deleted.object = payload.value("object", "");
+  return deleted;
+}
+
+ChatCompletionStoreMessage parse_chat_completion_store_message(const json& payload) {
+  ChatCompletionStoreMessage store_message;
+  store_message.raw = payload;
+  store_message.message = parse_message(payload);
+  store_message.id = payload.value("id", store_message.message.id.value_or(""));
+  store_message.content_parts = store_message.message.content;
+  return store_message;
+}
+
+ChatCompletionStoreMessageList parse_chat_completion_store_message_list(const json& payload) {
+  ChatCompletionStoreMessageList list;
+  list.raw = payload;
+  if (payload.contains("data") && payload["data"].is_array()) {
+    for (const auto& item : payload.at("data")) {
+      list.data.push_back(parse_chat_completion_store_message(item));
+    }
+  }
+  list.has_more = payload.value("has_more", false);
+  if (payload.contains("next_cursor") && payload["next_cursor"].is_string()) {
+    list.next_cursor = payload["next_cursor"].get<std::string>();
+  }
+  if (!list.next_cursor && payload.contains("last_id") && payload["last_id"].is_string()) {
+    list.next_cursor = payload["last_id"].get<std::string>();
+  }
+  if (!list.next_cursor && !list.data.empty()) {
+    list.next_cursor = list.data.back().id;
+  }
+  return list;
 }
 
 }  // namespace
@@ -246,6 +375,7 @@ ChatCompletion ChatCompletionsResource::create(const ChatCompletionRequest& requ
 
   if (!request.metadata.empty()) body["metadata"] = request.metadata;
   if (request.max_tokens) body["max_tokens"] = *request.max_tokens;
+  if (request.max_completion_tokens) body["max_completion_tokens"] = *request.max_completion_tokens;
   if (request.temperature) body["temperature"] = *request.temperature;
   if (request.top_p) body["top_p"] = *request.top_p;
   if (request.frequency_penalty) body["frequency_penalty"] = *request.frequency_penalty;
@@ -298,8 +428,27 @@ ChatCompletion ChatCompletionsResource::create(const ChatCompletionRequest& requ
   if (request.parallel_tool_calls) body["parallel_tool_calls"] = *request.parallel_tool_calls;
   if (request.user) body["user"] = *request.user;
   if (request.stream) body["stream"] = *request.stream;
+  if (request.store) body["store"] = *request.store;
+  if (!request.modalities.empty()) {
+    json modalities = json::array();
+    for (const auto& modality : request.modalities) {
+      modalities.push_back(modality);
+    }
+    body["modalities"] = std::move(modalities);
+  }
+  if (request.service_tier) body["service_tier"] = *request.service_tier;
+  if (request.stream_options) {
+    json stream_options = request.stream_options->raw.is_object() ? request.stream_options->raw : json::object();
+    if (request.stream_options->include_obfuscation.has_value()) {
+      stream_options["include_obfuscation"] = *request.stream_options->include_obfuscation;
+    }
+    if (request.stream_options->include_usage.has_value()) {
+      stream_options["include_usage"] = *request.stream_options->include_usage;
+    }
+    body["stream_options"] = std::move(stream_options);
+  }
 
-  auto response = client_.perform_request("POST", "/chat/completions", body.dump(), options);
+  auto response = client_.perform_request("POST", kChatCompletionsPath, body.dump(), options);
   try {
     auto payload = json::parse(response.body);
     return parse_chat_completion(payload);
@@ -323,6 +472,7 @@ void ChatCompletionsResource::create_stream(const ChatCompletionRequest& request
 
   if (!request.metadata.empty()) body["metadata"] = request.metadata;
   if (request.max_tokens) body["max_tokens"] = *request.max_tokens;
+  if (request.max_completion_tokens) body["max_completion_tokens"] = *request.max_completion_tokens;
   if (request.temperature) body["temperature"] = *request.temperature;
   if (request.top_p) body["top_p"] = *request.top_p;
   if (request.frequency_penalty) body["frequency_penalty"] = *request.frequency_penalty;
@@ -374,6 +524,25 @@ void ChatCompletionsResource::create_stream(const ChatCompletionRequest& request
   }
   if (request.parallel_tool_calls) body["parallel_tool_calls"] = *request.parallel_tool_calls;
   if (request.user) body["user"] = *request.user;
+  if (request.store) body["store"] = *request.store;
+  if (!request.modalities.empty()) {
+    json modalities = json::array();
+    for (const auto& modality : request.modalities) {
+      modalities.push_back(modality);
+    }
+    body["modalities"] = std::move(modalities);
+  }
+  if (request.service_tier) body["service_tier"] = *request.service_tier;
+  if (request.stream_options) {
+    json stream_options = request.stream_options->raw.is_object() ? request.stream_options->raw : json::object();
+    if (request.stream_options->include_obfuscation.has_value()) {
+      stream_options["include_obfuscation"] = *request.stream_options->include_obfuscation;
+    }
+    if (request.stream_options->include_usage.has_value()) {
+      stream_options["include_usage"] = *request.stream_options->include_usage;
+    }
+    body["stream_options"] = std::move(stream_options);
+  }
 
   RequestOptions request_options = options;
   request_options.headers["Accept"] = "text/event-stream";
@@ -389,7 +558,7 @@ void ChatCompletionsResource::create_stream(const ChatCompletionRequest& request
     stream.feed(data, size);
   };
 
-  client_.perform_request("POST", "/chat/completions", body.dump(), request_options);
+  client_.perform_request("POST", kChatCompletionsPath, body.dump(), request_options);
 
   stream.finalize();
 }
@@ -414,6 +583,339 @@ std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCo
       },
       options);
   return events;
+}
+
+ChatCompletion ChatCompletionsResource::retrieve(const std::string& completion_id) const {
+  return retrieve(completion_id, RequestOptions{});
+}
+
+ChatCompletion ChatCompletionsResource::retrieve(const std::string& completion_id,
+                                                 const RequestOptions& options) const {
+  const std::string path = std::string(kChatCompletionsPath) + "/" + completion_id;
+  auto response = client_.perform_request("GET", path, "", options);
+  try {
+    return parse_chat_completion(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse chat completion retrieve response: ") + ex.what());
+  }
+}
+
+ChatCompletion ChatCompletionsResource::update(const std::string& completion_id,
+                                               const ChatCompletionUpdateRequest& request) const {
+  return update(completion_id, request, RequestOptions{});
+}
+
+ChatCompletion ChatCompletionsResource::update(const std::string& completion_id,
+                                               const ChatCompletionUpdateRequest& request,
+                                               const RequestOptions& options) const {
+  const std::string path = std::string(kChatCompletionsPath) + "/" + completion_id;
+  json body = json::object();
+  if (request.clear_metadata) {
+    body["metadata"] = nullptr;
+  } else if (request.metadata) {
+    body["metadata"] = metadata_to_json(*request.metadata);
+  }
+
+  auto response = client_.perform_request("POST", path, body.dump(), options);
+  try {
+    return parse_chat_completion(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse chat completion update response: ") + ex.what());
+  }
+}
+
+ChatCompletionList ChatCompletionsResource::list() const {
+  return list(ChatCompletionListParams{}, RequestOptions{});
+}
+
+ChatCompletionList ChatCompletionsResource::list(const ChatCompletionListParams& params) const {
+  return list(params, RequestOptions{});
+}
+
+ChatCompletionList ChatCompletionsResource::list(const ChatCompletionListParams& params,
+                                                 const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_list_params(params, request_options);
+
+  auto response = client_.perform_request("GET", kChatCompletionsPath, "", request_options);
+  try {
+    return parse_chat_completion_list(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse chat completion list response: ") + ex.what());
+  }
+}
+
+CursorPage<ChatCompletion> ChatCompletionsResource::list_page() const {
+  return list_page(ChatCompletionListParams{}, RequestOptions{});
+}
+
+CursorPage<ChatCompletion> ChatCompletionsResource::list_page(const ChatCompletionListParams& params) const {
+  return list_page(params, RequestOptions{});
+}
+
+CursorPage<ChatCompletion> ChatCompletionsResource::list_page(const ChatCompletionListParams& params,
+                                                              const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_list_params(params, request_options);
+
+  auto fetch_impl = std::make_shared<std::function<CursorPage<ChatCompletion>(const PageRequestOptions&)>>();
+
+  *fetch_impl = [this, fetch_impl](const PageRequestOptions& request_options) -> CursorPage<ChatCompletion> {
+    RequestOptions next_options = to_request_options(request_options);
+    auto response =
+        client_.perform_request(request_options.method, request_options.path, request_options.body, next_options);
+
+    ChatCompletionList list;
+    try {
+      list = parse_chat_completion_list(json::parse(response.body));
+    } catch (const json::exception& ex) {
+      throw OpenAIError(std::string("Failed to parse chat completion list response: ") + ex.what());
+    }
+
+    std::optional<std::string> cursor = list.next_cursor;
+    if (!cursor && !list.data.empty()) {
+      cursor = list.data.back().id;
+    }
+
+    return CursorPage<ChatCompletion>(std::move(list.data),
+                                      list.has_more,
+                                      std::move(cursor),
+                                      request_options,
+                                      *fetch_impl,
+                                      "after",
+                                      std::move(list.raw));
+  };
+
+  PageRequestOptions initial;
+  initial.method = "GET";
+  initial.path = kChatCompletionsPath;
+  initial.headers = materialize_headers(request_options);
+  initial.query = materialize_query(request_options);
+
+  return (*fetch_impl)(initial);
+}
+
+ChatCompletionDeleted ChatCompletionsResource::remove(const std::string& completion_id) const {
+  return remove(completion_id, RequestOptions{});
+}
+
+ChatCompletionDeleted ChatCompletionsResource::remove(const std::string& completion_id,
+                                                      const RequestOptions& options) const {
+  const std::string path = std::string(kChatCompletionsPath) + "/" + completion_id;
+  RequestOptions request_options = options;
+  request_options.headers["Accept"] = "*/*";
+  auto response = client_.perform_request("DELETE", path, "", request_options);
+  try {
+    return parse_chat_completion_deleted(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse chat completion delete response: ") + ex.what());
+  }
+}
+
+ChatCompletionToolRunResult ChatCompletionsResource::run_tools(const ChatCompletionToolRunParams& params) const {
+  return run_tools(params, RequestOptions{});
+}
+
+ChatCompletionToolRunResult ChatCompletionsResource::run_tools(const ChatCompletionToolRunParams& params,
+                                                               const RequestOptions& options) const {
+  if (params.max_iterations == 0) {
+    throw OpenAIError("ChatCompletionToolRunParams.max_iterations must be greater than 0");
+  }
+
+  ChatCompletionRequest base_request = params.request;
+  base_request.stream = false;
+
+  std::map<std::string, ChatToolFunctionHandler> handlers;
+  std::vector<ChatCompletionToolDefinition> tool_definitions = base_request.tools;
+  for (const auto& handler : params.functions) {
+    if (!handler.definition.function || handler.definition.type != "function") {
+      throw OpenAIError("ChatCompletion tool handlers must define a function tool");
+    }
+    const auto& name = handler.definition.function->name;
+    handlers[name] = handler;
+
+    const bool already_defined = std::any_of(
+        tool_definitions.begin(), tool_definitions.end(), [&](const ChatCompletionToolDefinition& existing) {
+          if (existing.type != handler.definition.type) return false;
+          if (!existing.function || !handler.definition.function) return false;
+          return existing.function->name == name;
+        });
+    if (!already_defined) {
+      tool_definitions.push_back(handler.definition);
+    }
+  }
+
+  base_request.tools = std::move(tool_definitions);
+
+  std::vector<ChatMessage> transcript = base_request.messages;
+  std::vector<ChatCompletion> completions;
+
+  for (std::size_t iteration = 0; iteration < params.max_iterations; ++iteration) {
+    ChatCompletionRequest iteration_request = base_request;
+    iteration_request.messages = transcript;
+    iteration_request.stream = false;
+
+    ChatCompletion completion = create(iteration_request, options);
+    completions.push_back(completion);
+
+    if (completion.choices.empty() || !completion.choices[0].message.has_value()) {
+      throw OpenAIError("ChatCompletion response missing assistant message");
+    }
+
+    transcript.push_back(*completion.choices[0].message);
+    ChatMessage& assistant_message = transcript.back();
+
+    if (assistant_message.tool_calls.empty()) {
+      ChatCompletionToolRunResult result;
+      result.final_completion = completion;
+      result.completions = std::move(completions);
+      result.transcript = std::move(transcript);
+      return result;
+    }
+
+    for (const auto& tool_call : assistant_message.tool_calls) {
+      if (tool_call.type != "function") {
+        continue;
+      }
+
+      const std::string tool_name = tool_call.function.value("name", "");
+      ChatMessage tool_message;
+      tool_message.role = "tool";
+      tool_message.tool_call_id = tool_call.id;
+
+      ChatMessageContent content_block;
+      content_block.type = ChatMessageContent::Type::Text;
+
+      auto handler_it = handlers.find(tool_name);
+      if (handler_it == handlers.end()) {
+        content_block.text = "Tool '" + tool_name + "' is not registered.";
+        tool_message.content.push_back(content_block);
+        transcript.push_back(std::move(tool_message));
+        continue;
+      }
+
+      json args_json = json::object();
+      if (tool_call.function.contains("arguments")) {
+        const auto& arguments = tool_call.function.at("arguments");
+        if (arguments.is_string()) {
+          const auto args_text = arguments.get<std::string>();
+          if (!args_text.empty()) {
+            try {
+              args_json = json::parse(args_text);
+            } catch (const json::exception&) {
+              args_json = args_text;
+            }
+          }
+        } else {
+          args_json = arguments;
+        }
+      }
+
+      try {
+        json callback_result = handler_it->second.callback(args_json);
+        if (callback_result.is_string()) {
+          content_block.text = callback_result.get<std::string>();
+        } else if (callback_result.is_null()) {
+          content_block.text = "null";
+        } else {
+          content_block.text = callback_result.dump();
+        }
+      } catch (const std::exception& ex) {
+        content_block.text = ex.what();
+      } catch (...) {
+        content_block.text = "Tool execution failed.";
+      }
+
+      tool_message.content.push_back(content_block);
+      transcript.push_back(std::move(tool_message));
+    }
+  }
+
+  throw OpenAIError("Exceeded maximum chat completion iterations while running tools");
+}
+
+ChatCompletionStoreMessageList ChatCompletionsResource::MessagesResource::list(
+    const std::string& completion_id) const {
+  return list(completion_id, ChatCompletionMessageListParams{}, RequestOptions{});
+}
+
+ChatCompletionStoreMessageList ChatCompletionsResource::MessagesResource::list(
+    const std::string& completion_id,
+    const ChatCompletionMessageListParams& params) const {
+  return list(completion_id, params, RequestOptions{});
+}
+
+ChatCompletionStoreMessageList ChatCompletionsResource::MessagesResource::list(
+    const std::string& completion_id,
+    const ChatCompletionMessageListParams& params,
+    const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_message_list_params(params, request_options);
+
+  const std::string path = std::string(kChatCompletionsPath) + "/" + completion_id + "/messages";
+  auto response = client_.perform_request("GET", path, "", request_options);
+  try {
+    return parse_chat_completion_store_message_list(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse chat completion messages list response: ") + ex.what());
+  }
+}
+
+CursorPage<ChatCompletionStoreMessage> ChatCompletionsResource::MessagesResource::list_page(
+    const std::string& completion_id) const {
+  return list_page(completion_id, ChatCompletionMessageListParams{}, RequestOptions{});
+}
+
+CursorPage<ChatCompletionStoreMessage> ChatCompletionsResource::MessagesResource::list_page(
+    const std::string& completion_id,
+    const ChatCompletionMessageListParams& params) const {
+  return list_page(completion_id, params, RequestOptions{});
+}
+
+CursorPage<ChatCompletionStoreMessage> ChatCompletionsResource::MessagesResource::list_page(
+    const std::string& completion_id,
+    const ChatCompletionMessageListParams& params,
+    const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_message_list_params(params, request_options);
+
+  auto fetch_impl =
+      std::make_shared<std::function<CursorPage<ChatCompletionStoreMessage>(const PageRequestOptions&)>>();
+
+  *fetch_impl = [this, fetch_impl](const PageRequestOptions& request_options)
+      -> CursorPage<ChatCompletionStoreMessage> {
+    RequestOptions next_options = to_request_options(request_options);
+    auto response =
+        client_.perform_request(request_options.method, request_options.path, request_options.body, next_options);
+
+    ChatCompletionStoreMessageList list;
+    try {
+      list = parse_chat_completion_store_message_list(json::parse(response.body));
+    } catch (const json::exception& ex) {
+      throw OpenAIError(std::string("Failed to parse chat completion messages list response: ") + ex.what());
+    }
+
+    std::optional<std::string> cursor = list.next_cursor;
+    if (!cursor && !list.data.empty()) {
+      cursor = list.data.back().id;
+    }
+
+    return CursorPage<ChatCompletionStoreMessage>(std::move(list.data),
+                                                  list.has_more,
+                                                  std::move(cursor),
+                                                  request_options,
+                                                  *fetch_impl,
+                                                  "after",
+                                                  std::move(list.raw));
+  };
+
+  PageRequestOptions initial;
+  initial.method = "GET";
+  initial.path = std::string(kChatCompletionsPath) + "/" + completion_id + "/messages";
+  initial.headers = materialize_headers(request_options);
+  initial.query = materialize_query(request_options);
+
+  return (*fetch_impl)(initial);
 }
 
 }  // namespace openai

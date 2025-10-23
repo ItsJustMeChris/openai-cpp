@@ -31,7 +31,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 ## REST Resources
 - [x] Completions (`/completions`)
 - [x] Chat completions (basic create + streaming helper)
-- [ ] Chat completions advanced features (stored completions, tool runners, messages API)
+- [x] Chat completions advanced features (stored completions, tool runners, messages API)
 - [x] Responses (non-streaming create/retrieve/list/cancel/delete)
 - [x] Responses advanced features (streaming, input items, tool runners) – SSE event parsing available
 - [x] Models (retrieve/list/delete; pagination helpers pending)
