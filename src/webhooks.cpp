@@ -289,8 +289,6 @@ webhooks::EventData parse_event_data(webhooks::EventType type, const nlohmann::j
     }
     case EventType::RealtimeCallIncoming: {
       RealtimeCallIncomingData data;
-      data.id = data_json.value("id", "");
-      data.session_id = data_json.value("session_id", "");
       data.call_id = data_json.value("call_id", "");
       if (data_json.contains("sip_headers") && data_json.at("sip_headers").is_array()) {
         for (const auto& header_json : data_json.at("sip_headers")) {

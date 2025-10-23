@@ -22,8 +22,6 @@ struct FineTuningJobEventData {
 };
 
 struct RealtimeCallIncomingData {
-  std::string id;
-  std::string session_id;
   std::string call_id;
   struct SipHeader {
     std::string name;
