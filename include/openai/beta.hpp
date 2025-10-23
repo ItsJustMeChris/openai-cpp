@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include "openai/assistant_stream.hpp"
+#include "openai/chatkit.hpp"
 #include "openai/runs.hpp"
 #include "openai/thread_types.hpp"
 
@@ -253,10 +254,14 @@ private:
 
 class BetaResource {
 public:
-  explicit BetaResource(OpenAIClient& client) : client_(client), realtime_(client), threads_(client) {}
+  explicit BetaResource(OpenAIClient& client)
+      : client_(client), realtime_(client), chatkit_(client), threads_(client) {}
 
   AssistantsResource& assistants();
   const AssistantsResource& assistants() const;
+
+  beta::ChatKitResource& chatkit() { return chatkit_; }
+  const beta::ChatKitResource& chatkit() const { return chatkit_; }
 
   beta::BetaThreadsResource& threads() { return threads_; }
   const beta::BetaThreadsResource& threads() const { return threads_; }
@@ -267,6 +272,7 @@ public:
 private:
   OpenAIClient& client_;
   beta::RealtimeResource realtime_;
+  beta::ChatKitResource chatkit_;
   beta::BetaThreadsResource threads_;
 };
 

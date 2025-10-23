@@ -245,6 +245,8 @@ private:
   friend class BetaResource;
   friend class beta::RealtimeSessionsResource;
   friend class beta::RealtimeTranscriptionSessionsResource;
+  friend class beta::ChatKitSessionsResource;
+  friend class beta::ChatKitThreadsResource;
   friend class beta::BetaThreadsResource;
   friend class BatchesResource;
   friend class UploadsResource;
