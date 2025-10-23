@@ -49,9 +49,9 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Audio speech (create)
 - [x] Batches
 - [x] Vector stores (basic CRUD)
-- [x] Vector stores – double-checked parity (October 23, 2025)
+  - [x] Vector stores – double-checked parity (October 23, 2025)
 - [x] Vector store files/batches/search
-- [x] Vector store files/batches/search – double-checked parity (October 23, 2025)
+  - [x] Vector store files/batches/search – double-checked parity (October 23, 2025)
 - [x] Assistants (beta create/retrieve/update/list/delete)
 - [x] Threads (beta create/retrieve/update/delete)
 - [x] Assistants messages (beta thread messages)
@@ -67,7 +67,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Containers
 - [x] Videos
 - [x] Webhooks
-- [x] Webhooks – double-checked parity (October 23, 2025)
+  - [x] Webhooks – double-checked parity (October 23, 2025)
 - [x] Beta features (`beta`, `graders`, `realtime`, etc.)
 - [x] Evals (evaluations, runs, output items)
   - [x] Evals – double-checked parity (October 23, 2025)
