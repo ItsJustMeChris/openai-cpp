@@ -30,11 +30,13 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 
 ## REST Resources
 - [x] Completions (`/completions`)
+  - [x] Completions – double-checked parity (October 23, 2025)
 - [x] Chat completions (basic create + streaming helper)
 - [x] Chat completions advanced features (stored completions, tool runners, messages API)
 - [x] Responses (non-streaming create/retrieve/list/cancel/delete)
 - [x] Responses advanced features (streaming, input items, tool runners) – SSE event parsing available
 - [x] Models (retrieve/list/delete; pagination helpers pending)
+  - [x] Models – double-checked parity (October 23, 2025)
 - [x] Embeddings (default base64 decode, float/base64 variants)
 - [x] Moderations (basic create)
 - [x] Files (list/retrieve/create/delete/content; advanced upload helpers pending)

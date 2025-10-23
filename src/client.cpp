@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <set>
 #include <optional>
+#include <map>
 
 #include "openai/logging.hpp"
 #include "openai/utils/base64.hpp"
@@ -182,12 +183,65 @@ std::chrono::milliseconds compute_retry_delay(const HttpResponse* response,
   return delay;
 }
 
+json completion_prompt_to_json(const CompletionRequest::Prompt& prompt) {
+  return std::visit(
+      [](const auto& value) -> json {
+        return json(value);
+      },
+      prompt);
+}
+
+json completion_stop_to_json(const CompletionRequest::StopSequences& stop) {
+  return std::visit(
+      [](const auto& value) -> json {
+        return json(value);
+      },
+      stop);
+}
+
+json completion_stream_options_to_json(const CompletionStreamOptions& options) {
+  json result = json::object();
+  if (options.include_obfuscation.has_value()) {
+    result["include_obfuscation"] = *options.include_obfuscation;
+  }
+  if (options.include_usage.has_value()) {
+    result["include_usage"] = *options.include_usage;
+  }
+  return result;
+}
+
 json completion_request_to_json(const CompletionRequest& request) {
   json body;
   body["model"] = request.model;
-  body["prompt"] = request.prompt;
+  if (request.prompt.has_value()) {
+    body["prompt"] = completion_prompt_to_json(*request.prompt);
+  } else {
+    body["prompt"] = "";
+  }
+  if (request.best_of) {
+    body["best_of"] = *request.best_of;
+  }
+  if (request.echo) {
+    body["echo"] = *request.echo;
+  }
+  if (request.frequency_penalty) {
+    body["frequency_penalty"] = *request.frequency_penalty;
+  }
+  if (request.logit_bias) {
+    json bias = json::object();
+    for (const auto& [token, weight] : *request.logit_bias) {
+      bias[token] = weight;
+    }
+    body["logit_bias"] = std::move(bias);
+  }
+  if (request.logprobs) {
+    body["logprobs"] = *request.logprobs;
+  }
   if (request.max_tokens) {
     body["max_tokens"] = *request.max_tokens;
+  }
+  if (request.n) {
+    body["n"] = *request.n;
   }
   if (request.temperature) {
     body["temperature"] = *request.temperature;
@@ -195,14 +249,32 @@ json completion_request_to_json(const CompletionRequest& request) {
   if (request.top_p) {
     body["top_p"] = *request.top_p;
   }
-  if (request.n) {
-    body["n"] = *request.n;
+  if (request.presence_penalty) {
+    body["presence_penalty"] = *request.presence_penalty;
+  }
+  if (request.seed) {
+    body["seed"] = *request.seed;
   }
   if (request.stop) {
-    body["stop"] = *request.stop;
+    body["stop"] = completion_stop_to_json(*request.stop);
   }
   if (request.stream) {
     body["stream"] = *request.stream;
+  }
+  if (request.stream_options) {
+    json stream_options = completion_stream_options_to_json(*request.stream_options);
+    if (!stream_options.empty()) {
+      body["stream_options"] = std::move(stream_options);
+    }
+  }
+  if (request.suffix) {
+    body["suffix"] = *request.suffix;
+  }
+  if (request.top_logprobs) {
+    body["top_logprobs"] = *request.top_logprobs;
+  }
+  if (request.user) {
+    body["user"] = *request.user;
   }
   return body;
 }
@@ -235,15 +307,75 @@ Completion parse_completion(const json& payload) {
   Completion completion;
   completion.id = payload.value("id", "");
   completion.object = payload.value("object", "");
-  completion.created = payload.value("created", 0);
+  completion.created = payload.value("created", 0LL);
   completion.model = payload.value("model", "");
+  if (payload.contains("system_fingerprint") && !payload.at("system_fingerprint").is_null()) {
+    completion.system_fingerprint = payload.at("system_fingerprint").get<std::string>();
+  }
 
   if (payload.contains("choices")) {
     for (const auto& choice_json : payload.at("choices")) {
       CompletionChoice choice;
       choice.index = choice_json.value("index", 0);
       choice.text = choice_json.value("text", "");
-      choice.finish_reason = choice_json.value("finish_reason", "");
+      if (choice_json.contains("finish_reason") && !choice_json.at("finish_reason").is_null()) {
+        choice.finish_reason = choice_json.at("finish_reason").get<std::string>();
+      }
+
+      if (choice_json.contains("logprobs") && !choice_json.at("logprobs").is_null()) {
+        const auto& logprobs_json = choice_json.at("logprobs");
+        CompletionChoiceLogprobs logprobs;
+
+        if (logprobs_json.contains("text_offset") && logprobs_json.at("text_offset").is_array()) {
+          std::vector<int> offsets;
+          offsets.reserve(logprobs_json.at("text_offset").size());
+          for (const auto& item : logprobs_json.at("text_offset")) {
+            offsets.push_back(item.get<int>());
+          }
+          logprobs.text_offset = std::move(offsets);
+        }
+
+        if (logprobs_json.contains("token_logprobs") && logprobs_json.at("token_logprobs").is_array()) {
+          std::vector<double> probs;
+          probs.reserve(logprobs_json.at("token_logprobs").size());
+          for (const auto& item : logprobs_json.at("token_logprobs")) {
+            probs.push_back(item.get<double>());
+          }
+          logprobs.token_logprobs = std::move(probs);
+        }
+
+        if (logprobs_json.contains("tokens") && logprobs_json.at("tokens").is_array()) {
+          std::vector<std::string> tokens;
+          tokens.reserve(logprobs_json.at("tokens").size());
+          for (const auto& item : logprobs_json.at("tokens")) {
+            tokens.push_back(item.get<std::string>());
+          }
+          logprobs.tokens = std::move(tokens);
+        }
+
+        if (logprobs_json.contains("top_logprobs") && logprobs_json.at("top_logprobs").is_array()) {
+          std::vector<std::map<std::string, double>> top;
+          top.reserve(logprobs_json.at("top_logprobs").size());
+          for (const auto& entry : logprobs_json.at("top_logprobs")) {
+            std::map<std::string, double> top_entry;
+            if (entry.is_object()) {
+              for (const auto& item : entry.items()) {
+                if (!item.value().is_null()) {
+                  top_entry[item.key()] = item.value().get<double>();
+                }
+              }
+            }
+            top.push_back(std::move(top_entry));
+          }
+          logprobs.top_logprobs = std::move(top);
+        }
+
+        if (logprobs.text_offset.has_value() || logprobs.token_logprobs.has_value() || logprobs.tokens.has_value() ||
+            logprobs.top_logprobs.has_value()) {
+          choice.logprobs = std::move(logprobs);
+        }
+      }
+
       completion.choices.push_back(std::move(choice));
     }
   }
@@ -254,6 +386,43 @@ Completion parse_completion(const json& payload) {
     usage.prompt_tokens = usage_json.value("prompt_tokens", 0);
     usage.completion_tokens = usage_json.value("completion_tokens", 0);
     usage.total_tokens = usage_json.value("total_tokens", 0);
+
+    if (usage_json.contains("completion_tokens_details") && !usage_json.at("completion_tokens_details").is_null()) {
+      const auto& details_json = usage_json.at("completion_tokens_details");
+      if (details_json.is_object()) {
+        CompletionUsageCompletionTokensDetails details;
+        if (details_json.contains("accepted_prediction_tokens") &&
+            !details_json.at("accepted_prediction_tokens").is_null()) {
+          details.accepted_prediction_tokens = details_json.at("accepted_prediction_tokens").get<int>();
+        }
+        if (details_json.contains("audio_tokens") && !details_json.at("audio_tokens").is_null()) {
+          details.audio_tokens = details_json.at("audio_tokens").get<int>();
+        }
+        if (details_json.contains("reasoning_tokens") && !details_json.at("reasoning_tokens").is_null()) {
+          details.reasoning_tokens = details_json.at("reasoning_tokens").get<int>();
+        }
+        if (details_json.contains("rejected_prediction_tokens") &&
+            !details_json.at("rejected_prediction_tokens").is_null()) {
+          details.rejected_prediction_tokens = details_json.at("rejected_prediction_tokens").get<int>();
+        }
+        usage.completion_tokens_details = std::move(details);
+      }
+    }
+
+    if (usage_json.contains("prompt_tokens_details") && !usage_json.at("prompt_tokens_details").is_null()) {
+      const auto& details_json = usage_json.at("prompt_tokens_details");
+      if (details_json.is_object()) {
+        CompletionUsagePromptTokensDetails details;
+        if (details_json.contains("audio_tokens") && !details_json.at("audio_tokens").is_null()) {
+          details.audio_tokens = details_json.at("audio_tokens").get<int>();
+        }
+        if (details_json.contains("cached_tokens") && !details_json.at("cached_tokens").is_null()) {
+          details.cached_tokens = details_json.at("cached_tokens").get<int>();
+        }
+        usage.prompt_tokens_details = std::move(details);
+      }
+    }
+
     completion.usage = usage;
   }
 
@@ -387,7 +556,7 @@ CreateEmbeddingResponse parse_embedding_response(const json& payload, bool decod
 Model parse_model(const json& payload) {
   Model model;
   model.id = payload.value("id", "");
-  model.created = payload.value("created", 0);
+  model.created = payload.value("created", 0LL);
   model.object = payload.value("object", "");
   model.owned_by = payload.value("owned_by", "");
   return model;

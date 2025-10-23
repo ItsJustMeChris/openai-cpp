@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -7,7 +8,7 @@ namespace openai {
 
 struct Model {
   std::string id;
-  int created = 0;
+  std::int64_t created = 0;
   std::string object;
   std::string owned_by;
 };
@@ -24,4 +25,3 @@ struct ModelList {
 };
 
 }  // namespace openai
-
