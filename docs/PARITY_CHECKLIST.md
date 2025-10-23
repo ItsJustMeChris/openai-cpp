@@ -60,7 +60,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Containers
 - [x] Videos
 - [x] Webhooks
-- [ ] Beta features (`beta`, `graders`, `realtime`, etc.)
+- [x] Beta features (`beta`, `graders`, `realtime`, etc.)
 - [x] Azure OpenAI compatibility layer
 
 ## Tooling & Tests
