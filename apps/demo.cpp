@@ -1,4 +1,5 @@
 #include "openai/client.hpp"
+#include "openai/responses.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -50,14 +51,14 @@ int main()
 
     std::cout << "Streaming response...\n";
     openai::ResponseRequest stream_request;
-    stream_request.model = "gpt-5-nano";
+    stream_request.model = "gpt-4o-mini";
     stream_request.input.push_back(openai::ResponseInputItem{
         .type = openai::ResponseInputItem::Type::Message,
         .message = openai::ResponseInputMessage{
             .role = "user",
             .content = {openai::ResponseInputContent{
                 .type = openai::ResponseInputContent::Type::Text,
-                .text = "Stream a long stroy about the history of C++"}}}});
+                .text = "Stream a long story about the history of C++"}}}});
 
     std::string streamed_text;
     std::size_t chunk_index = 0;
@@ -70,8 +71,8 @@ int main()
           {
             streamed_text += event.text_delta->delta;
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - start)
-                .count();
+                                std::chrono::steady_clock::now() - start)
+                                .count();
             std::cout << "Chunk " << chunk_index++ << " at " << elapsed
                       << " ms: " << event.text_delta->delta << std::endl;
           }

@@ -1036,8 +1036,6 @@ std::optional<ResponseStreamEvent> parse_response_stream_event(const struct Serv
 class OpenAIClient;
 template <typename Item>
 class CursorPage;
-struct ResponseStreamSnapshot;
-class ResponseStream;
 
 class ResponsesResource {
 public:
@@ -1086,27 +1084,10 @@ public:
                      const std::function<bool(const ResponseStreamEvent&)>& on_event,
                      const struct RequestOptions& options) const;
 
-  ResponseStream stream(const ResponseRequest& request) const;
-  ResponseStream stream(const ResponseRequest& request, const struct RequestOptions& options) const;
-
-  ResponseStreamSnapshot create_stream_snapshot(const ResponseRequest& request) const;
-  ResponseStreamSnapshot create_stream_snapshot(const ResponseRequest& request,
-                                                const struct RequestOptions& options) const;
-
   std::vector<ServerSentEvent> retrieve_stream(const std::string& response_id) const;
   std::vector<ServerSentEvent> retrieve_stream(const std::string& response_id,
                                                const ResponseRetrieveOptions& retrieve_options,
                                                const struct RequestOptions& options) const;
-
-  ResponseStream stream(const std::string& response_id) const;
-  ResponseStream stream(const std::string& response_id,
-                        const ResponseRetrieveOptions& retrieve_options,
-                        const struct RequestOptions& options) const;
-
-  ResponseStreamSnapshot retrieve_stream_snapshot(const std::string& response_id) const;
-  ResponseStreamSnapshot retrieve_stream_snapshot(const std::string& response_id,
-                                                  const ResponseRetrieveOptions& retrieve_options,
-                                                  const struct RequestOptions& options) const;
 
   InputItemsResource& input_items() { return input_items_; }
   const InputItemsResource& input_items() const { return input_items_; }

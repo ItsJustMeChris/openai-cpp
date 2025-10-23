@@ -40,7 +40,6 @@ add_library(openai-cpp
     src/threads.cpp
     src/messages.cpp
     src/assistant_stream.cpp
-    src/response_stream.cpp
     src/run_steps.cpp
     src/runs.cpp
     src/streaming.cpp
