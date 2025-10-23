@@ -43,6 +43,7 @@ Tracking progress toward 1:1 feature coverage with the official `openai-node` Ty
 - [x] Files (list/retrieve/create/delete/content; advanced upload helpers pending)
   - [x] Files – double-checked parity (October 23, 2025)
 - [x] Images (generate/edit/variation basic support; streaming events pending)
+  - [x] Images – double-checked parity (October 23, 2025)
 - [x] Audio transcriptions (create)
 - [x] Audio translations (create)
 - [x] Audio speech (create)

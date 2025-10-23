@@ -17,9 +17,28 @@ struct ImageData {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct ImageUsageInputTokensDetails {
+  int image_tokens = 0;
+  int text_tokens = 0;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ImageUsage {
+  int input_tokens = 0;
+  int output_tokens = 0;
+  int total_tokens = 0;
+  std::optional<ImageUsageInputTokensDetails> input_tokens_details;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct ImagesResponse {
   int created = 0;
+  std::optional<std::string> background;
   std::vector<ImageData> data;
+  std::optional<std::string> output_format;
+  std::optional<std::string> quality;
+  std::optional<std::string> size;
+  std::optional<ImageUsage> usage;
   nlohmann::json raw = nlohmann::json::object();
 };
 
@@ -31,6 +50,11 @@ struct ImageGenerateRequest {
   std::optional<std::string> response_format;
   std::optional<std::string> quality;
   std::optional<std::string> style;
+  std::optional<std::string> moderation;
+  std::optional<double> output_compression;
+  std::optional<std::string> output_format;
+  std::optional<int> partial_images;
+  std::optional<bool> stream;
   std::optional<std::string> background;
   std::optional<std::string> user;
 };
@@ -58,6 +82,11 @@ struct ImageEditRequest {
   std::optional<std::string> response_format;
   std::optional<std::string> quality;
   std::optional<std::string> style;
+  std::optional<std::string> input_fidelity;
+  std::optional<double> output_compression;
+  std::optional<std::string> output_format;
+  std::optional<int> partial_images;
+  std::optional<bool> stream;
   std::optional<std::string> background;
   std::optional<std::string> user;
 };

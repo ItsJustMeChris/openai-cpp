@@ -18,6 +18,18 @@ ImagesResponse parse_images_response(const json& payload) {
   ImagesResponse response;
   response.raw = payload;
   response.created = payload.value("created", 0);
+  if (payload.contains("background") && payload["background"].is_string()) {
+    response.background = payload["background"].get<std::string>();
+  }
+  if (payload.contains("output_format") && payload["output_format"].is_string()) {
+    response.output_format = payload["output_format"].get<std::string>();
+  }
+  if (payload.contains("quality") && payload["quality"].is_string()) {
+    response.quality = payload["quality"].get<std::string>();
+  }
+  if (payload.contains("size") && payload["size"].is_string()) {
+    response.size = payload["size"].get<std::string>();
+  }
   if (payload.contains("data")) {
     for (const auto& item : payload.at("data")) {
       ImageData data;
@@ -33,6 +45,23 @@ ImagesResponse parse_images_response(const json& payload) {
       }
       response.data.push_back(std::move(data));
     }
+  }
+  if (payload.contains("usage") && payload["usage"].is_object()) {
+    ImageUsage usage;
+    const auto& usage_json = payload["usage"];
+    usage.raw = usage_json;
+    usage.input_tokens = usage_json.value("input_tokens", 0);
+    usage.output_tokens = usage_json.value("output_tokens", 0);
+    usage.total_tokens = usage_json.value("total_tokens", 0);
+    if (usage_json.contains("input_tokens_details") && usage_json["input_tokens_details"].is_object()) {
+      ImageUsageInputTokensDetails details;
+      const auto& details_json = usage_json["input_tokens_details"];
+      details.raw = details_json;
+      details.image_tokens = details_json.value("image_tokens", 0);
+      details.text_tokens = details_json.value("text_tokens", 0);
+      usage.input_tokens_details = std::move(details);
+    }
+    response.usage = std::move(usage);
   }
   return response;
 }
@@ -60,12 +89,12 @@ std::string build_image_multipart(const ImageVariationRequest& request, const st
   parts.emplace_back("image", materialize_file_as_string(request.image, "image.bin"));
   if (request.model) parts.emplace_back("model", *request.model);
   if (request.prompt) parts.emplace_back("prompt", *request.prompt);
+  if (request.background) parts.emplace_back("background", *request.background);
   if (request.n) parts.emplace_back("n", std::to_string(*request.n));
   if (request.size) parts.emplace_back("size", *request.size);
   if (request.response_format) parts.emplace_back("response_format", *request.response_format);
   if (request.quality) parts.emplace_back("quality", *request.quality);
   if (request.style) parts.emplace_back("style", *request.style);
-  if (request.background) parts.emplace_back("background", *request.background);
   if (request.user) parts.emplace_back("user", *request.user);
   return build_multipart_body(parts, boundary);
 }
@@ -81,8 +110,18 @@ ImagesResponse ImagesResource::generate(const ImageGenerateRequest& request, con
   if (request.response_format) body["response_format"] = *request.response_format;
   if (request.quality) body["quality"] = *request.quality;
   if (request.style) body["style"] = *request.style;
+  if (request.moderation) body["moderation"] = *request.moderation;
+  if (request.output_compression) body["output_compression"] = *request.output_compression;
+  if (request.output_format) body["output_format"] = *request.output_format;
+  if (request.partial_images) body["partial_images"] = *request.partial_images;
   if (request.background) body["background"] = *request.background;
   if (request.user) body["user"] = *request.user;
+  if (request.stream) {
+    if (*request.stream) {
+      throw OpenAIError("Image streaming is not yet supported. Remove stream=true for now.");
+    }
+    body["stream"] = *request.stream;
+  }
 
   auto response = client_.perform_request("POST", kImagesGenerate, body.dump(), options);
   try {
@@ -132,8 +171,18 @@ ImagesResponse ImagesResource::edit(const ImageEditRequest& request, const Reque
   }
   if (request.quality) parts.emplace_back("quality", *request.quality);
   if (request.style) parts.emplace_back("style", *request.style);
+  if (request.input_fidelity) parts.emplace_back("input_fidelity", *request.input_fidelity);
+  if (request.output_compression) parts.emplace_back("output_compression", std::to_string(*request.output_compression));
+  if (request.output_format) parts.emplace_back("output_format", *request.output_format);
+  if (request.partial_images) parts.emplace_back("partial_images", std::to_string(*request.partial_images));
   if (request.background) parts.emplace_back("background", *request.background);
   if (request.user) parts.emplace_back("user", *request.user);
+  if (request.stream) {
+    if (*request.stream) {
+      throw OpenAIError("Image streaming is not yet supported. Remove stream=true for now.");
+    }
+    parts.emplace_back("stream", *request.stream ? "true" : "false");
+  }
   auto body = build_multipart_body(parts, boundary);
 
   RequestOptions request_options = options;
