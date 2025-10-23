@@ -11,36 +11,106 @@
 
 namespace openai {
 
-struct TranscriptionTokens {
+struct TranscriptionUsageInputTokenDetails {
+  std::optional<int> audio_tokens;
+  std::optional<int> text_tokens;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct TranscriptionUsage {
+  enum class Type { Tokens, Duration, Unknown };
+  Type type = Type::Unknown;
   int input_tokens = 0;
   int output_tokens = 0;
   int total_tokens = 0;
-  nlohmann::json extra = nlohmann::json::object();
+  std::optional<TranscriptionUsageInputTokenDetails> input_token_details;
+  double seconds = 0.0;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct TranscriptionLogprob {
+  std::optional<std::string> token;
+  std::optional<std::vector<int>> bytes;
+  std::optional<double> logprob;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct TranscriptionSegment {
+  int id = 0;
+  double avg_logprob = 0.0;
+  double compression_ratio = 0.0;
+  double end = 0.0;
+  double no_speech_prob = 0.0;
+  int seek = 0;
+  double start = 0.0;
+  double temperature = 0.0;
+  std::string text;
+  std::vector<int> tokens;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct TranscriptionWord {
+  double end = 0.0;
+  double start = 0.0;
+  std::string word;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct TranscriptionDiarizedSegment {
+  std::string id;
+  double end = 0.0;
+  std::string speaker;
+  double start = 0.0;
+  std::string text;
+  nlohmann::json raw = nlohmann::json::object();
 };
 
 struct TranscriptionResponse {
   std::string text;
-  std::optional<TranscriptionTokens> usage;
+  std::optional<TranscriptionUsage> usage;
+  std::optional<std::vector<TranscriptionLogprob>> logprobs;
+  std::optional<std::vector<TranscriptionSegment>> segments;
+  std::optional<std::vector<TranscriptionWord>> words;
+  std::optional<std::vector<TranscriptionDiarizedSegment>> diarized_segments;
+  std::optional<double> duration;
+  std::optional<std::string> language;
+  std::optional<std::string> task;
+  bool is_diarized = false;
+  bool is_verbose = false;
+  bool is_plain_text = false;
   nlohmann::json raw = nlohmann::json::object();
+};
+
+struct TranscriptionChunkingStrategy {
+  enum class Type { Auto, ServerVad };
+  Type type = Type::Auto;
+  std::optional<int> prefix_padding_ms;
+  std::optional<int> silence_duration_ms;
+  std::optional<double> threshold;
 };
 
 struct TranscriptionRequest {
   FileUploadRequest file;
   std::string model;
-  std::optional<std::string> response_format;
+  std::optional<TranscriptionChunkingStrategy> chunking_strategy;
+  std::optional<std::vector<std::string>> include;
+  std::optional<std::vector<std::string>> known_speaker_names;
+  std::optional<std::vector<std::string>> known_speaker_references;
   std::optional<std::string> language;
   std::optional<std::string> prompt;
+  std::optional<std::string> response_format;
+  std::optional<bool> stream;
   std::optional<double> temperature;
   std::optional<std::vector<std::string>> timestamp_granularities;
-  std::optional<bool> logprobs;
-  std::optional<int> max_alternatives;
-  std::optional<bool> profanity_filter;
-  std::optional<bool> remove_background;
-  std::optional<bool> speaker_labels;
 };
 
 struct TranslationResponse {
   std::string text;
+  std::optional<double> duration;
+  std::optional<std::string> language;
+  std::optional<std::vector<TranscriptionSegment>> segments;
+  bool is_verbose = false;
+  bool is_plain_text = false;
   nlohmann::json raw = nlohmann::json::object();
 };
 
@@ -128,4 +198,3 @@ private:
 };
 
 }  // namespace openai
-
