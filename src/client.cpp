@@ -542,12 +542,10 @@ CreateEmbeddingResponse parse_embedding_response(const json& payload, bool decod
     }
   }
 
-  if (payload.contains("usage")) {
-    EmbeddingUsage usage;
+  if (payload.contains("usage") && payload.at("usage").is_object()) {
     const auto& usage_json = payload.at("usage");
-    usage.prompt_tokens = usage_json.value("prompt_tokens", 0);
-    usage.total_tokens = usage_json.value("total_tokens", 0);
-    response.usage = usage;
+    response.usage.prompt_tokens = usage_json.value("prompt_tokens", 0);
+    response.usage.total_tokens = usage_json.value("total_tokens", 0);
   }
 
   return response;

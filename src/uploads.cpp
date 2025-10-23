@@ -18,9 +18,7 @@ FileObject parse_file_object(const json& payload) {
   file.filename = payload.value("filename", "");
   file.object = payload.value("object", "");
   file.purpose = payload.value("purpose", "");
-  if (payload.contains("status") && !payload.at("status").is_null()) {
-    file.status = payload.at("status").get<std::string>();
-  }
+  file.status = payload.value("status", "");
   if (payload.contains("expires_at") && !payload.at("expires_at").is_null()) {
     file.expires_at = payload.at("expires_at").get<int>();
   }
@@ -157,4 +155,3 @@ Upload UploadsResource::complete(const std::string& upload_id, const UploadCompl
 }
 
 }  // namespace openai
-

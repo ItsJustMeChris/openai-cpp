@@ -16,6 +16,21 @@ using json = nlohmann::json;
 
 constexpr const char* kFilesPath = "/files";
 
+void apply_file_list_params(const FileListParams& params, RequestOptions& options) {
+  if (params.limit) {
+    options.query_params["limit"] = std::to_string(*params.limit);
+  }
+  if (params.after) {
+    options.query_params["after"] = *params.after;
+  }
+  if (params.order) {
+    options.query_params["order"] = *params.order;
+  }
+  if (params.purpose) {
+    options.query_params["purpose"] = *params.purpose;
+  }
+}
+
 }  // namespace
 
 utils::UploadFile FileUploadRequest::materialize(const std::string& default_filename) const {
@@ -38,7 +53,7 @@ utils::UploadFile FileUploadRequest::materialize(const std::string& default_file
   }
 
   if (content_type) {
-    upload.content_type = content_type;
+    upload.content_type = *content_type;
   }
 
   if (!upload.content_type.has_value()) {
@@ -59,9 +74,7 @@ FileObject parse_file(const json& payload) {
   file.filename = payload.value("filename", "");
   file.object = payload.value("object", "");
   file.purpose = payload.value("purpose", "");
-  if (payload.contains("status") && !payload.at("status").is_null()) {
-    file.status = payload.at("status").get<std::string>();
-  }
+  file.status = payload.value("status", "");
   if (payload.contains("expires_at") && !payload.at("expires_at").is_null()) {
     file.expires_at = payload.at("expires_at").get<int>();
   }
@@ -96,6 +109,26 @@ FileList parse_file_list(const json& payload) {
 }
 
 }  // namespace
+
+FileList FilesResource::list(const FileListParams& params) const {
+  return list(params, RequestOptions{});
+}
+
+FileList FilesResource::list(const FileListParams& params, const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_file_list_params(params, request_options);
+  return list(request_options);
+}
+
+CursorPage<FileObject> FilesResource::list_page(const FileListParams& params) const {
+  return list_page(params, RequestOptions{});
+}
+
+CursorPage<FileObject> FilesResource::list_page(const FileListParams& params, const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  apply_file_list_params(params, request_options);
+  return list_page(request_options);
+}
 
 CursorPage<FileObject> FilesResource::list_page(const RequestOptions& options) const {
   auto fetch_impl = std::make_shared<std::function<CursorPage<FileObject>(const PageRequestOptions&)>>();
@@ -188,6 +221,10 @@ FileObject FilesResource::create(const FileUploadRequest& request, const Request
   utils::MultipartFormData form;
   form.append_text("purpose", request.purpose);
   form.append_file("file", upload.filename, content_type, upload.data);
+  if (request.expires_after) {
+    form.append_text("expires_after[anchor]", request.expires_after->anchor);
+    form.append_text("expires_after[seconds]", std::to_string(request.expires_after->seconds));
+  }
   auto encoded = form.build();
 
   RequestOptions request_options = options;

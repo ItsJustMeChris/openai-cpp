@@ -47,8 +47,7 @@ TEST(FilesResourceTest, ListParsesFiles) {
   const auto& file = list.data.front();
   EXPECT_EQ(file.id, "file-1");
   EXPECT_EQ(file.filename, "doc.txt");
-  ASSERT_TRUE(file.status.has_value());
-  EXPECT_EQ(*file.status, "processed");
+  EXPECT_EQ(file.status, "processed");
 
   ASSERT_TRUE(mock_ptr->last_request().has_value());
 }
@@ -99,6 +98,40 @@ TEST(FilesResourceTest, ListPageSupportsCursorPagination) {
   const auto& last_request = mock_ptr->last_request();
   ASSERT_TRUE(last_request.has_value());
   EXPECT_NE(last_request->url.find("after=cursor-2"), std::string::npos);
+}
+
+TEST(FilesResourceTest, ListAcceptsQueryParameters) {
+  using namespace openai;
+
+  auto mock_client = std::make_unique<oait::MockHttpClient>();
+  auto* mock_ptr = mock_client.get();
+
+  const std::string body = R"({
+    "data": [],
+    "has_more": false
+  })";
+
+  mock_ptr->enqueue_response(HttpResponse{200, {}, body});
+
+  ClientOptions options;
+  options.api_key = "sk-test";
+
+  OpenAIClient client(options, std::move(mock_client));
+
+  FileListParams params;
+  params.limit = 2;
+  params.after = "cursor-1";
+  params.order = "asc";
+  params.purpose = "assistants";
+
+  client.files().list(params);
+
+  const auto& last_request = mock_ptr->last_request();
+  ASSERT_TRUE(last_request.has_value());
+  EXPECT_NE(last_request->url.find("limit=2"), std::string::npos);
+  EXPECT_NE(last_request->url.find("after=cursor-1"), std::string::npos);
+  EXPECT_NE(last_request->url.find("order=asc"), std::string::npos);
+  EXPECT_NE(last_request->url.find("purpose=assistants"), std::string::npos);
 }
 
 TEST(FilesResourceTest, RetrieveParsesFile) {
@@ -180,6 +213,10 @@ TEST(FilesResourceTest, CreateBuildsMultipartBody) {
   request.purpose = "assistants";
   request.file_path = tmp.string();
   request.file_name = "upload.txt";
+  FileUploadExpiresAfter expires_after;
+  expires_after.anchor = "created_at";
+  expires_after.seconds = 3600;
+  request.expires_after = expires_after;
 
   auto file = client.files().create(request);
   EXPECT_EQ(file.id, "file-upload");
@@ -190,6 +227,10 @@ TEST(FilesResourceTest, CreateBuildsMultipartBody) {
   EXPECT_NE(last_request.headers.at("Content-Type").find("multipart/form-data"), std::string::npos);
   EXPECT_NE(last_request.body.find("assistants"), std::string::npos);
   EXPECT_NE(last_request.body.find("hello"), std::string::npos);
+  EXPECT_NE(last_request.body.find("expires_after[anchor]"), std::string::npos);
+  EXPECT_NE(last_request.body.find("created_at"), std::string::npos);
+  EXPECT_NE(last_request.body.find("expires_after[seconds]"), std::string::npos);
+  EXPECT_NE(last_request.body.find("3600"), std::string::npos);
 
   std::filesystem::remove(tmp);
 }

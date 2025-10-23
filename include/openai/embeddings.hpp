@@ -24,7 +24,7 @@ struct CreateEmbeddingResponse {
   std::vector<Embedding> data;
   std::string model;
   std::string object;
-  std::optional<EmbeddingUsage> usage;
+  EmbeddingUsage usage;
 };
 
 struct EmbeddingRequest {
@@ -46,4 +46,3 @@ struct EmbeddingRequest {
 };
 
 }  // namespace openai
-

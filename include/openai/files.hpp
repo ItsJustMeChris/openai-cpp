@@ -19,7 +19,7 @@ struct FileObject {
   std::string filename;
   std::string object;
   std::string purpose;
-  std::optional<std::string> status;
+  std::string status;
   std::optional<int> expires_at;
   std::optional<std::string> status_details;
   nlohmann::json raw = nlohmann::json::object();
@@ -39,9 +39,21 @@ struct FileList {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct FileListParams {
+  std::optional<int> limit;
+  std::optional<std::string> after;
+  std::optional<std::string> order;
+  std::optional<std::string> purpose;
+};
+
 struct FileContent {
   std::vector<std::uint8_t> data;
   std::map<std::string, std::string> headers;
+};
+
+struct FileUploadExpiresAfter {
+  std::string anchor;
+  int seconds = 0;
 };
 
 struct FileUploadRequest {
@@ -50,6 +62,7 @@ struct FileUploadRequest {
   std::optional<utils::UploadFile> file_data;
   std::optional<std::string> file_name;
   std::optional<std::string> content_type;
+  std::optional<FileUploadExpiresAfter> expires_after;
 
   utils::UploadFile materialize(const std::string& default_filename = "file") const;
 };
@@ -66,8 +79,12 @@ public:
 
   FileList list() const;
   FileList list(const RequestOptions& options) const;
+  FileList list(const FileListParams& params) const;
+  FileList list(const FileListParams& params, const RequestOptions& options) const;
   CursorPage<FileObject> list_page() const;
   CursorPage<FileObject> list_page(const RequestOptions& options) const;
+  CursorPage<FileObject> list_page(const FileListParams& params) const;
+  CursorPage<FileObject> list_page(const FileListParams& params, const RequestOptions& options) const;
 
   FileObject retrieve(const std::string& file_id) const;
   FileObject retrieve(const std::string& file_id, const RequestOptions& options) const;
