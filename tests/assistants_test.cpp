@@ -52,8 +52,22 @@ TEST(AssistantsResourceTest, CreateSendsBetaHeaderAndSerializesRequest) {
   function_tool.function = fn;
   request.tools.push_back(function_tool);
   AssistantToolResources resources;
-  resources.code_interpreter_file_ids.push_back("file_1");
-  resources.file_search_vector_store_ids.push_back("vs_1");
+  AssistantToolResources::CodeInterpreter ci;
+  ci.file_ids.push_back("file_1");
+  resources.code_interpreter = ci;
+  AssistantToolResources::FileSearch file_search;
+  file_search.vector_store_ids.push_back("vs_1");
+  AssistantToolResources::FileSearch::VectorStore vector_store;
+  vector_store.file_ids.push_back("doc_1");
+  AssistantToolResources::FileSearch::VectorStore::ChunkingStrategy strategy;
+  strategy.type = AssistantToolResources::FileSearch::VectorStore::ChunkingStrategy::Type::Static;
+  AssistantToolResources::FileSearch::VectorStore::StaticChunking static_chunk;
+  static_chunk.chunk_overlap_tokens = 200;
+  static_chunk.max_chunk_size_tokens = 800;
+  strategy.static_options = static_chunk;
+  vector_store.chunking_strategy = strategy;
+  file_search.vector_stores.push_back(vector_store);
+  resources.file_search = file_search;
   request.tool_resources = resources;
   AssistantResponseFormat format;
   format.type = "json_schema";
@@ -61,6 +75,7 @@ TEST(AssistantsResourceTest, CreateSendsBetaHeaderAndSerializesRequest) {
   request.response_format = format;
   request.temperature = 0.3;
   request.top_p = 0.9;
+  request.reasoning_effort = "high";
 
   auto assistant = client.assistants().create(request);
   EXPECT_EQ(assistant.id, "asst_123");
@@ -79,9 +94,23 @@ TEST(AssistantsResourceTest, CreateSendsBetaHeaderAndSerializesRequest) {
   ASSERT_TRUE(payload.contains("tool_resources"));
   EXPECT_EQ(payload.at("tool_resources").at("code_interpreter").at("file_ids")[0], "file_1");
   EXPECT_EQ(payload.at("tool_resources").at("file_search").at("vector_store_ids")[0], "vs_1");
+  EXPECT_EQ(payload.at("tool_resources")
+                .at("file_search")
+                .at("vector_stores")[0]
+                .at("chunking_strategy")
+                .at("type"),
+            "static");
+  EXPECT_EQ(payload.at("tool_resources")
+                .at("file_search")
+                .at("vector_stores")[0]
+                .at("chunking_strategy")
+                .at("static")
+                .at("chunk_overlap_tokens"),
+            200);
   EXPECT_EQ(payload.at("response_format").at("type"), "json_schema");
   EXPECT_DOUBLE_EQ(payload.at("temperature"), 0.3);
   EXPECT_DOUBLE_EQ(payload.at("top_p"), 0.9);
+  EXPECT_EQ(payload.at("reasoning_effort"), "high");
 }
 
 TEST(AssistantsResourceTest, UpdateParsesAssistant) {

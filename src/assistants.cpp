@@ -20,6 +20,24 @@ void apply_beta_header(RequestOptions& options) {
   options.headers[kBetaHeaderName] = kBetaHeaderValue;
 }
 
+const char* to_string(AssistantToolResources::FileSearch::VectorStore::ChunkingStrategy::Type type) {
+  switch (type) {
+    case AssistantToolResources::FileSearch::VectorStore::ChunkingStrategy::Type::Auto:
+      return "auto";
+    case AssistantToolResources::FileSearch::VectorStore::ChunkingStrategy::Type::Static:
+      return "static";
+  }
+  return "auto";
+}
+
+AssistantToolResources::FileSearch::VectorStore::ChunkingStrategy::Type chunking_strategy_type_from_string(
+    const std::string& value) {
+  if (value == "static") {
+    return AssistantToolResources::FileSearch::VectorStore::ChunkingStrategy::Type::Static;
+  }
+  return AssistantToolResources::FileSearch::VectorStore::ChunkingStrategy::Type::Auto;
+}
+
 json tool_to_json(const AssistantTool& tool) {
   json value;
   switch (tool.type) {
@@ -31,10 +49,12 @@ json tool_to_json(const AssistantTool& tool) {
       if (tool.file_search) {
         json overrides;
         if (tool.file_search->max_num_results) overrides["max_num_results"] = *tool.file_search->max_num_results;
-        if (tool.file_search->ranker || tool.file_search->score_threshold) {
+        if (tool.file_search->ranking_options) {
           json ranking;
-          if (tool.file_search->ranker) ranking["ranker"] = *tool.file_search->ranker;
-          if (tool.file_search->score_threshold) ranking["score_threshold"] = *tool.file_search->score_threshold;
+          if (tool.file_search->ranking_options->ranker) ranking["ranker"] = *tool.file_search->ranking_options->ranker;
+          if (tool.file_search->ranking_options->score_threshold) {
+            ranking["score_threshold"] = *tool.file_search->ranking_options->score_threshold;
+          }
           overrides["ranking_options"] = std::move(ranking);
         }
         value["file_search"] = std::move(overrides);
@@ -71,11 +91,18 @@ AssistantTool parse_tool(const json& payload) {
       }
       if (obj.contains("ranking_options") && obj["ranking_options"].is_object()) {
         const auto& ranking = obj.at("ranking_options");
+        AssistantTool::FileSearchOverrides::RankingOptions options;
+        bool has_options = false;
         if (ranking.contains("ranker") && ranking["ranker"].is_string()) {
-          overrides.ranker = ranking["ranker"].get<std::string>();
+          options.ranker = ranking["ranker"].get<std::string>();
+          has_options = true;
         }
         if (ranking.contains("score_threshold") && ranking["score_threshold"].is_number()) {
-          overrides.score_threshold = ranking["score_threshold"].get<double>();
+          options.score_threshold = ranking["score_threshold"].get<double>();
+          has_options = true;
+        }
+        if (has_options) {
+          overrides.ranking_options = options;
         }
       }
       tool.file_search = overrides;
@@ -100,11 +127,49 @@ AssistantTool parse_tool(const json& payload) {
 
 json tool_resources_to_json(const AssistantToolResources& resources) {
   json value = json::object();
-  if (!resources.code_interpreter_file_ids.empty()) {
-    value["code_interpreter"] = json::object({{"file_ids", resources.code_interpreter_file_ids}});
+  if (resources.code_interpreter && !resources.code_interpreter->file_ids.empty()) {
+    value["code_interpreter"] = json::object({{"file_ids", resources.code_interpreter->file_ids}});
   }
-  if (!resources.file_search_vector_store_ids.empty()) {
-    value["file_search"] = json::object({{"vector_store_ids", resources.file_search_vector_store_ids}});
+  if (resources.file_search) {
+    json file_search = json::object();
+    if (!resources.file_search->vector_store_ids.empty()) {
+      file_search["vector_store_ids"] = resources.file_search->vector_store_ids;
+    }
+    if (!resources.file_search->vector_stores.empty()) {
+      json vector_stores = json::array();
+      for (const auto& store : resources.file_search->vector_stores) {
+        json store_json = json::object();
+        if (store.chunking_strategy) {
+          json chunking;
+          const auto& strategy = *store.chunking_strategy;
+          chunking["type"] = to_string(strategy.type);
+          if (strategy.type ==
+                  AssistantToolResources::FileSearch::VectorStore::ChunkingStrategy::Type::Static &&
+              strategy.static_options) {
+            json static_json;
+            static_json["chunk_overlap_tokens"] = strategy.static_options->chunk_overlap_tokens;
+            static_json["max_chunk_size_tokens"] = strategy.static_options->max_chunk_size_tokens;
+            chunking["static"] = std::move(static_json);
+          }
+          store_json["chunking_strategy"] = std::move(chunking);
+        }
+        if (!store.file_ids.empty()) {
+          store_json["file_ids"] = store.file_ids;
+        }
+        if (store.metadata && !store.metadata->empty()) {
+          json metadata = json::object();
+          for (const auto& entry : *store.metadata) {
+            metadata[entry.first] = entry.second;
+          }
+          store_json["metadata"] = std::move(metadata);
+        }
+        vector_stores.push_back(std::move(store_json));
+      }
+      file_search["vector_stores"] = std::move(vector_stores);
+    }
+    if (!file_search.empty()) {
+      value["file_search"] = std::move(file_search);
+    }
   }
   return value;
 }
@@ -113,18 +178,58 @@ AssistantToolResources parse_tool_resources(const json& payload) {
   AssistantToolResources resources;
   if (payload.contains("code_interpreter") && payload["code_interpreter"].is_object()) {
     const auto& ci = payload.at("code_interpreter");
+    AssistantToolResources::CodeInterpreter code_interpreter;
     if (ci.contains("file_ids") && ci["file_ids"].is_array()) {
       for (const auto& item : ci.at("file_ids")) {
-        if (item.is_string()) resources.code_interpreter_file_ids.push_back(item.get<std::string>());
+        if (item.is_string()) code_interpreter.file_ids.push_back(item.get<std::string>());
       }
     }
+    if (!code_interpreter.file_ids.empty()) resources.code_interpreter = code_interpreter;
   }
   if (payload.contains("file_search") && payload["file_search"].is_object()) {
     const auto& fs = payload.at("file_search");
+    AssistantToolResources::FileSearch file_search;
     if (fs.contains("vector_store_ids") && fs["vector_store_ids"].is_array()) {
       for (const auto& item : fs.at("vector_store_ids")) {
-        if (item.is_string()) resources.file_search_vector_store_ids.push_back(item.get<std::string>());
+        if (item.is_string()) file_search.vector_store_ids.push_back(item.get<std::string>());
       }
+    }
+    if (fs.contains("vector_stores") && fs["vector_stores"].is_array()) {
+      for (const auto& entry : fs.at("vector_stores")) {
+        if (!entry.is_object()) continue;
+        AssistantToolResources::FileSearch::VectorStore store;
+        if (entry.contains("chunking_strategy") && entry["chunking_strategy"].is_object()) {
+          const auto& chunking = entry.at("chunking_strategy");
+          AssistantToolResources::FileSearch::VectorStore::ChunkingStrategy strategy;
+          strategy.type = chunking_strategy_type_from_string(chunking.value("type", "auto"));
+          if (strategy.type ==
+                  AssistantToolResources::FileSearch::VectorStore::ChunkingStrategy::Type::Static &&
+              chunking.contains("static") && chunking["static"].is_object()) {
+            const auto& static_obj = chunking.at("static");
+            AssistantToolResources::FileSearch::VectorStore::StaticChunking static_opts;
+            static_opts.chunk_overlap_tokens = static_obj.value("chunk_overlap_tokens", 0);
+            static_opts.max_chunk_size_tokens = static_obj.value("max_chunk_size_tokens", 0);
+            strategy.static_options = static_opts;
+          }
+          store.chunking_strategy = strategy;
+        }
+        if (entry.contains("file_ids") && entry["file_ids"].is_array()) {
+          for (const auto& file_id : entry.at("file_ids")) {
+            if (file_id.is_string()) store.file_ids.push_back(file_id.get<std::string>());
+          }
+        }
+        if (entry.contains("metadata") && entry["metadata"].is_object()) {
+          std::map<std::string, std::string> metadata;
+          for (auto it = entry["metadata"].begin(); it != entry["metadata"].end(); ++it) {
+            if (it.value().is_string()) metadata[it.key()] = it.value().get<std::string>();
+          }
+          if (!metadata.empty()) store.metadata = std::move(metadata);
+        }
+        file_search.vector_stores.push_back(std::move(store));
+      }
+    }
+    if (!file_search.vector_store_ids.empty() || !file_search.vector_stores.empty()) {
+      resources.file_search = std::move(file_search);
     }
   }
   return resources;
@@ -191,6 +296,9 @@ Assistant parse_assistant(const json& payload) {
   if (payload.contains("top_p") && payload["top_p"].is_number()) {
     assistant.top_p = payload["top_p"].get<double>();
   }
+  if (payload.contains("reasoning_effort") && !payload["reasoning_effort"].is_null()) {
+    assistant.reasoning_effort = payload["reasoning_effort"].get<std::string>();
+  }
   if (payload.contains("tool_resources") && payload["tool_resources"].is_object()) {
     assistant.tool_resources = parse_tool_resources(payload.at("tool_resources"));
   }
@@ -237,6 +345,7 @@ json create_request_to_json(const AssistantCreateRequest& request) {
   if (request.response_format) body["response_format"] = response_format_to_json(*request.response_format);
   if (request.temperature) body["temperature"] = *request.temperature;
   if (request.top_p) body["top_p"] = *request.top_p;
+  if (request.reasoning_effort) body["reasoning_effort"] = *request.reasoning_effort;
   return body;
 }
 
@@ -259,6 +368,7 @@ json update_request_to_json(const AssistantUpdateRequest& request) {
   if (request.response_format) body["response_format"] = response_format_to_json(*request.response_format);
   if (request.temperature) body["temperature"] = *request.temperature;
   if (request.top_p) body["top_p"] = *request.top_p;
+  if (request.reasoning_effort) body["reasoning_effort"] = *request.reasoning_effort;
   return body;
 }
 

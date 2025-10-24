@@ -19,6 +19,26 @@ json parse_json(const std::string& data) {
   }
 }
 
+AssistantErrorData parse_error_data(const json& payload) {
+  AssistantErrorData data;
+  if (payload.contains("code") && payload["code"].is_string()) {
+    data.code = payload["code"].get<std::string>();
+  }
+  if (payload.contains("message") && payload["message"].is_string()) {
+    data.message = payload["message"].get<std::string>();
+  } else {
+    data.message = "";
+  }
+  if (payload.contains("param") && payload["param"].is_string()) {
+    data.param = payload["param"].get<std::string>();
+  }
+  if (payload.contains("type") && payload["type"].is_string()) {
+    data.type = payload["type"].get<std::string>();
+  }
+  data.raw = payload;
+  return data;
+}
+
 }  // namespace
 
 AssistantStreamParser::AssistantStreamParser(EventCallback callback) : callback_(std::move(callback)) {}
@@ -32,19 +52,25 @@ void AssistantStreamParser::feed(const ServerSentEvent& event) {
   AssistantStreamEvent variant;
 
   if (event_name == "error") {
-    variant = AssistantErrorEvent{.name = event_name, .error = payload.value("message", "")};
+    variant = AssistantErrorEvent{.event = event_name, .data = parse_error_data(payload)};
   } else if (event_name.rfind("thread.run.step.delta", 0) == 0) {
-    variant = AssistantRunStepDeltaEvent{.name = event_name, .delta = parse_run_step_delta_json(payload)};
+    variant = AssistantRunStepDeltaEvent{.event = event_name, .data = parse_run_step_delta_json(payload)};
   } else if (event_name.rfind("thread.run.step", 0) == 0) {
-    variant = AssistantRunStepEvent{.name = event_name, .run_step = parse_run_step_json(payload)};
+    variant = AssistantRunStepEvent{.event = event_name, .data = parse_run_step_json(payload)};
   } else if (event_name.rfind("thread.run.", 0) == 0) {
-    variant = AssistantRunEvent{.name = event_name, .run = parse_run_json(payload)};
+    variant = AssistantRunEvent{.event = event_name, .data = parse_run_json(payload)};
   } else if (event_name.rfind("thread.message.delta", 0) == 0) {
-    variant = AssistantMessageDeltaEvent{.name = event_name, .delta = parse_thread_message_delta_json(payload)};
+    variant = AssistantMessageDeltaEvent{.event = event_name, .data = parse_thread_message_delta_json(payload)};
   } else if (event_name.rfind("thread.message.", 0) == 0) {
-    variant = AssistantMessageEvent{.name = event_name, .message = parse_thread_message_json(payload)};
+    variant = AssistantMessageEvent{.event = event_name, .data = parse_thread_message_json(payload)};
   } else if (event_name.rfind("thread.", 0) == 0) {
-    variant = AssistantThreadEvent{.name = event_name, .thread = parse_thread_json(payload)};
+    AssistantThreadEvent thread_event;
+    thread_event.event = event_name;
+    thread_event.data = parse_thread_json(payload);
+    if (payload.contains("enabled") && payload["enabled"].is_boolean()) {
+      thread_event.enabled = payload["enabled"].get<bool>();
+    }
+    variant = thread_event;
   } else {
     return;  // Unknown event; ignore silently for now.
   }
@@ -124,17 +150,17 @@ void AssistantStreamSnapshot::ingest(const AssistantStreamEvent& event) {
       [&](auto&& ev) {
         using T = std::decay_t<decltype(ev)>;
         if constexpr (std::is_same_v<T, AssistantThreadEvent>) {
-          last_thread_ = ev.thread;
+          last_thread_ = ev.data;
         } else if constexpr (std::is_same_v<T, AssistantRunEvent>) {
-          last_run_ = ev.run;
+          last_run_ = ev.data;
         } else if constexpr (std::is_same_v<T, AssistantMessageEvent>) {
-          apply_message_event(ev.message);
+          apply_message_event(ev.data);
         } else if constexpr (std::is_same_v<T, AssistantMessageDeltaEvent>) {
-          apply_message_delta(ev);
+          apply_message_delta(ev.data);
         } else if constexpr (std::is_same_v<T, AssistantRunStepEvent>) {
-          apply_run_step_event(ev.run_step);
+          apply_run_step_event(ev.data);
         } else if constexpr (std::is_same_v<T, AssistantRunStepDeltaEvent>) {
-          apply_run_step_delta(ev);
+          apply_run_step_delta(ev.data);
         }
       },
       event);
@@ -173,16 +199,15 @@ void AssistantStreamSnapshot::apply_message_event(const ThreadMessage& message) 
   }
 }
 
-void AssistantStreamSnapshot::apply_message_delta(const AssistantMessageDeltaEvent& delta_event) {
-  const auto& delta_event_body = delta_event.delta;
-  const std::string& id = delta_event_body.id;
+void AssistantStreamSnapshot::apply_message_delta(const ThreadMessageDeltaEvent& delta_event) {
+  const std::string& id = delta_event.id;
   auto& snapshot = message_snapshots_[id];
   if (snapshot.id.empty()) snapshot.id = id;
   if (std::find(message_order_.begin(), message_order_.end(), id) == message_order_.end()) {
     message_order_.push_back(id);
   }
 
-  const auto& delta_body = delta_event_body.delta;
+  const auto& delta_body = delta_event.delta;
   if (delta_body.role) snapshot.role = *delta_body.role;
 
   for (const auto& part : delta_body.content) {
@@ -217,8 +242,8 @@ void AssistantStreamSnapshot::apply_run_step_event(const RunStep& step) {
   }
 }
 
-void AssistantStreamSnapshot::apply_run_step_delta(const AssistantRunStepDeltaEvent& delta_event) {
-  const auto& delta_event_body = delta_event.delta;
+void AssistantStreamSnapshot::apply_run_step_delta(const RunStepDeltaEvent& delta_event) {
+  const auto& delta_event_body = delta_event;
   const std::string& id = delta_event_body.id;
   auto& snapshot = run_step_snapshots_[id];
   if (snapshot.id.empty()) snapshot.id = id;

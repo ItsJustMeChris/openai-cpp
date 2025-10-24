@@ -55,10 +55,12 @@ json tool_to_json(const AssistantTool& tool) {
       if (tool.file_search) {
         json overrides;
         if (tool.file_search->max_num_results) overrides["max_num_results"] = *tool.file_search->max_num_results;
-        if (tool.file_search->ranker || tool.file_search->score_threshold) {
+        if (tool.file_search->ranking_options) {
           json ranking;
-          if (tool.file_search->ranker) ranking["ranker"] = *tool.file_search->ranker;
-          if (tool.file_search->score_threshold) ranking["score_threshold"] = *tool.file_search->score_threshold;
+          if (tool.file_search->ranking_options->ranker) ranking["ranker"] = *tool.file_search->ranking_options->ranker;
+          if (tool.file_search->ranking_options->score_threshold) {
+            ranking["score_threshold"] = *tool.file_search->ranking_options->score_threshold;
+          }
           overrides["ranking_options"] = std::move(ranking);
         }
         value["file_search"] = std::move(overrides);
@@ -240,8 +242,17 @@ AssistantTool parse_assistant_tool(const json& payload) {
       }
       if (obj.contains("ranking_options") && obj["ranking_options"].is_object()) {
         const auto& ranking = obj.at("ranking_options");
-        if (ranking.contains("ranker") && ranking["ranker"].is_string()) overrides.ranker = ranking["ranker"].get<std::string>();
-        if (ranking.contains("score_threshold") && ranking["score_threshold"].is_number()) overrides.score_threshold = ranking["score_threshold"].get<double>();
+        AssistantTool::FileSearchOverrides::RankingOptions options;
+        bool has_options = false;
+        if (ranking.contains("ranker") && ranking["ranker"].is_string()) {
+          options.ranker = ranking["ranker"].get<std::string>();
+          has_options = true;
+        }
+        if (ranking.contains("score_threshold") && ranking["score_threshold"].is_number()) {
+          options.score_threshold = ranking["score_threshold"].get<double>();
+          has_options = true;
+        }
+        if (has_options) overrides.ranking_options = options;
       }
     }
     tool.file_search = overrides;

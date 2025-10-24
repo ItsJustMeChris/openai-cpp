@@ -38,9 +38,9 @@ struct AssistantStreamSnapshot {
 
 private:
   void apply_message_event(const ThreadMessage& message);
-  void apply_message_delta(const AssistantMessageDeltaEvent& delta_event);
+  void apply_message_delta(const ThreadMessageDeltaEvent& delta_event);
   void apply_run_step_event(const RunStep& step);
-  void apply_run_step_delta(const AssistantRunStepDeltaEvent& delta_event);
+  void apply_run_step_delta(const RunStepDeltaEvent& delta_event);
 
   std::vector<AssistantStreamEvent> events_;
   std::optional<Thread> last_thread_;

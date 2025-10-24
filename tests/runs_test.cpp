@@ -214,7 +214,7 @@ TEST(RunsResourceTest, CreateStreamSupportsCallback) {
         ++event_count;
         if (std::holds_alternative<AssistantRunEvent>(event)) {
           const auto& run_event = std::get<AssistantRunEvent>(event);
-          if (run_event.run.status == "completed") {
+          if (run_event.data.status == "completed") {
             saw_completed = true;
             return false;  // stop once completed event arrives
           }

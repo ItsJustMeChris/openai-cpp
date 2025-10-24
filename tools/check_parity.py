@@ -25,6 +25,11 @@ MANUAL_TS_MAP: Dict[str, Iterable[str]] = {
     ],
 }
 
+MANUAL_CPP_MAP: Dict[str, Iterable[str]] = {
+    "assistants": ["assistants.hpp", "runs.hpp"],
+    "assistant_stream": ["runs.hpp", "assistants.hpp"],
+}
+
 DEFAULT_RESOURCES = [
     "audio",
     "batches",
@@ -105,6 +110,19 @@ def gather_ts_paths(resource: str) -> Iterable[pathlib.Path]:
             yield ts_file
 
 
+def gather_cpp_paths(resource: str) -> Iterable[pathlib.Path]:
+    if resource in MANUAL_CPP_MAP:
+        for rel in MANUAL_CPP_MAP[resource]:
+            candidate = INCLUDE_ROOT / rel
+            if candidate.exists():
+                yield candidate
+        return
+
+    header = INCLUDE_ROOT / f"{resource}.hpp"
+    if header.exists():
+        yield header
+
+
 def extract_ts_fields(resource: str) -> Set[str]:
     fields: Set[str] = set()
     for path in gather_ts_paths(resource):
@@ -121,39 +139,36 @@ def extract_ts_fields(resource: str) -> Set[str]:
 
 
 def extract_cpp_fields(resource: str) -> Set[str]:
-    header = INCLUDE_ROOT / f"{resource}.hpp"
-    if not header.exists():
-        return set()
-
-    text = header.read_text()
     fields: Set[str] = set()
-    search_pos = 0
 
-    while True:
-        match = STRUCT_PATTERN.search(text, search_pos)
-        if not match:
-            break
-        brace_index = text.find("{", match.start())
-        block = find_block(text, brace_index)
-        statement = ""
-        for raw_line in block.splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("//"):
-                continue
-            statement += " " + line
-            if ";" in line:
-                part = statement.strip()
-                statement = ""
-                if "(" in part or part.startswith("using ") or part.startswith("friend "):
+    for header in gather_cpp_paths(resource):
+        text = header.read_text()
+        search_pos = 0
+        while True:
+            match = STRUCT_PATTERN.search(text, search_pos)
+            if not match:
+                break
+            brace_index = text.find("{", match.start())
+            block = find_block(text, brace_index)
+            statement = ""
+            for raw_line in block.splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("//"):
                     continue
-                if "enum " in part or part.endswith("}"):
-                    continue
-                field_match = FIELD_PATTERN.search(part)
-                if field_match:
-                    name = field_match.group(1)
-                    name = FIELD_ALIASES.get(name, name)
-                    fields.add(name)
-        search_pos = brace_index + len(block)
+                statement += " " + line
+                if ";" in line:
+                    part = statement.strip()
+                    statement = ""
+                    if "(" in part or part.startswith("using ") or part.startswith("friend "):
+                        continue
+                    if "enum " in part or part.endswith("}"):
+                        continue
+                    field_match = FIELD_PATTERN.search(part)
+                    if field_match:
+                        name = field_match.group(1)
+                        name = FIELD_ALIASES.get(name, name)
+                        fields.add(name)
+            search_pos = brace_index + len(block)
 
     return fields
 

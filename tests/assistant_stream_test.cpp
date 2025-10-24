@@ -38,26 +38,26 @@ TEST(AssistantStreamParserTest, EmitsTypedEvents) {
 
   ASSERT_EQ(events.size(), 6u);
   EXPECT_TRUE(std::holds_alternative<AssistantThreadEvent>(events[0]));
-  EXPECT_EQ(std::get<AssistantThreadEvent>(events[0]).thread.id, "thread_1");
+  EXPECT_EQ(std::get<AssistantThreadEvent>(events[0]).data.id, "thread_1");
 
   EXPECT_TRUE(std::holds_alternative<AssistantRunEvent>(events[1]));
-  EXPECT_EQ(std::get<AssistantRunEvent>(events[1]).run.id, "run_1");
+  EXPECT_EQ(std::get<AssistantRunEvent>(events[1]).data.id, "run_1");
 
   EXPECT_TRUE(std::holds_alternative<AssistantRunStepDeltaEvent>(events[2]));
-  const auto& step_delta_event = std::get<AssistantRunStepDeltaEvent>(events[2]).delta;
+  const auto& step_delta_event = std::get<AssistantRunStepDeltaEvent>(events[2]).data;
   ASSERT_TRUE(step_delta_event.delta.details.has_value());
   ASSERT_FALSE(step_delta_event.delta.details->tool_calls.empty());
   EXPECT_EQ(step_delta_event.delta.details->tool_calls[0].function->name, "lookup");
 
   EXPECT_TRUE(std::holds_alternative<AssistantMessageEvent>(events[3]));
-  EXPECT_EQ(std::get<AssistantMessageEvent>(events[3]).message.id, "msg_1");
+  EXPECT_EQ(std::get<AssistantMessageEvent>(events[3]).data.id, "msg_1");
 
   EXPECT_TRUE(std::holds_alternative<AssistantMessageDeltaEvent>(events[4]));
-  const auto& msg_delta_event = std::get<AssistantMessageDeltaEvent>(events[4]).delta;
+  const auto& msg_delta_event = std::get<AssistantMessageDeltaEvent>(events[4]).data;
   ASSERT_FALSE(msg_delta_event.delta.content.empty());
   ASSERT_TRUE(msg_delta_event.delta.content[0].text.has_value());
   EXPECT_EQ(msg_delta_event.delta.content[0].text->value, "Hi");
 
   EXPECT_TRUE(std::holds_alternative<AssistantErrorEvent>(events[5]));
-  EXPECT_EQ(std::get<AssistantErrorEvent>(events[5]).error, "stream failure");
+  EXPECT_EQ(std::get<AssistantErrorEvent>(events[5]).data.message, "stream failure");
 }

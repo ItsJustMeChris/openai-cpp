@@ -20,9 +20,13 @@ struct AssistantTool {
   };
 
   struct FileSearchOverrides {
+    struct RankingOptions {
+      std::optional<std::string> ranker;
+      std::optional<double> score_threshold;
+    };
+
     std::optional<int> max_num_results;
-    std::optional<std::string> ranker;
-    std::optional<double> score_threshold;
+    std::optional<RankingOptions> ranking_options;
   };
 
   struct FunctionDefinition {
@@ -38,8 +42,38 @@ struct AssistantTool {
 };
 
 struct AssistantToolResources {
-  std::vector<std::string> code_interpreter_file_ids;
-  std::vector<std::string> file_search_vector_store_ids;
+  struct CodeInterpreter {
+    std::vector<std::string> file_ids;
+  };
+
+  struct FileSearch {
+    struct VectorStore {
+      struct StaticChunking {
+        int chunk_overlap_tokens = 0;
+        int max_chunk_size_tokens = 0;
+      };
+
+      struct ChunkingStrategy {
+        enum class Type {
+          Auto,
+          Static
+        };
+
+        Type type = Type::Auto;
+        std::optional<StaticChunking> static_options;
+      };
+
+      std::optional<ChunkingStrategy> chunking_strategy;
+      std::vector<std::string> file_ids;
+      std::optional<std::map<std::string, std::string>> metadata;
+    };
+
+    std::vector<std::string> vector_store_ids;
+    std::vector<VectorStore> vector_stores;
+  };
+
+  std::optional<CodeInterpreter> code_interpreter;
+  std::optional<FileSearch> file_search;
 };
 
 struct AssistantResponseFormat {
@@ -66,6 +100,7 @@ struct Assistant {
   std::optional<AssistantResponseFormat> response_format;
   std::optional<double> temperature;
   std::optional<double> top_p;
+  std::optional<std::string> reasoning_effort;
   std::optional<AssistantToolResources> tool_resources;
   nlohmann::json raw = nlohmann::json::object();
 };
@@ -88,6 +123,7 @@ struct AssistantCreateRequest {
   std::optional<AssistantResponseFormat> response_format;
   std::optional<double> temperature;
   std::optional<double> top_p;
+  std::optional<std::string> reasoning_effort;
 };
 
 struct AssistantUpdateRequest {
@@ -101,6 +137,7 @@ struct AssistantUpdateRequest {
   std::optional<AssistantResponseFormat> response_format;
   std::optional<double> temperature;
   std::optional<double> top_p;
+  std::optional<std::string> reasoning_effort;
 };
 
 struct AssistantList {

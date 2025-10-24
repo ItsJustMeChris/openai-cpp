@@ -183,39 +183,48 @@ struct ThreadCreateAndRunRequest {
   RunCreateRequest run;
 };
 
+struct AssistantErrorData {
+  std::optional<std::string> code;
+  std::string message;
+  std::optional<std::string> param;
+  std::optional<std::string> type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct AssistantThreadEvent {
-  std::string name;
-  Thread thread;
+  std::string event;
+  Thread data;
+  std::optional<bool> enabled;
 };
 
 struct AssistantRunEvent {
-  std::string name;
-  Run run;
+  std::string event;
+  Run data;
 };
 
 struct AssistantRunStepEvent {
-  std::string name;
-  RunStep run_step;
+  std::string event;
+  RunStep data;
 };
 
 struct AssistantRunStepDeltaEvent {
-  std::string name;
-  RunStepDeltaEvent delta;
+  std::string event;
+  RunStepDeltaEvent data;
 };
 
 struct AssistantMessageEvent {
-  std::string name;
-  ThreadMessage message;
+  std::string event;
+  ThreadMessage data;
 };
 
 struct AssistantMessageDeltaEvent {
-  std::string name;
-  ThreadMessageDeltaEvent delta;
+  std::string event;
+  ThreadMessageDeltaEvent data;
 };
 
 struct AssistantErrorEvent {
-  std::string name;
-  std::string error;
+  std::string event;
+  AssistantErrorData data;
 };
 
 using AssistantStreamEvent = std::variant<AssistantThreadEvent,
