@@ -52,13 +52,14 @@ int main()
     std::cout << "Streaming response...\n";
     openai::ResponseRequest stream_request;
     stream_request.model = "gpt-4o-mini";
-    stream_request.input.push_back(openai::ResponseInputItem{
-        .type = openai::ResponseInputItem::Type::Message,
-        .message = openai::ResponseInputMessage{
-            .role = "user",
-            .content = {openai::ResponseInputContent{
-                .type = openai::ResponseInputContent::Type::Text,
-                .text = "Stream a long story about the history of C++"}}}});
+    stream_request.input = {
+        openai::ResponseInputItem{
+            .type = openai::ResponseInputItem::Type::Message,
+            .message = openai::ResponseInputMessage{
+                .role = "user",
+                .content = {openai::ResponseInputContent{
+                    .type = openai::ResponseInputContent::Type::Text,
+                    .text = "Stream a long story about the history of C++"}}}}};
 
     std::string streamed_text;
     std::size_t chunk_index = 0;
@@ -66,13 +67,14 @@ int main()
 
     client.responses().create_stream(
         stream_request,
-        [&](const openai::ResponseStreamEvent &event) {
+        [&](const openai::ResponseStreamEvent &event)
+        {
           if (event.text_delta)
           {
             streamed_text += event.text_delta->delta;
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                std::chrono::steady_clock::now() - start)
-                                .count();
+                               std::chrono::steady_clock::now() - start)
+                               .count();
             std::cout << "Chunk " << chunk_index++ << " at " << elapsed
                       << " ms: " << event.text_delta->delta << std::endl;
           }
