@@ -77,6 +77,12 @@ target_link_libraries(openai-chat PRIVATE openai-cpp)
 
 target_include_directories(openai-chat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external)
 
+add_executable(openai-image-demo apps/image_demo.cpp)
+
+target_link_libraries(openai-image-demo PRIVATE openai-cpp)
+
+target_include_directories(openai-image-demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external)
+
 if (APPLE)
   enable_language(OBJCXX)
   add_executable(openai-responses-audio-demo apps/responses_audio_demo.mm)
