@@ -43,13 +43,33 @@ CodeInterpreterToolCallDetails parse_code_tool_call(const json& payload) {
           log.index = output.value("index", 0);
           log.logs = output.value("logs", "");
           call.log_outputs.push_back(log);
+
+          CodeInterpreterOutput aggregate;
+          aggregate.type = CodeInterpreterOutput::Type::Logs;
+          aggregate.logs = log.logs;
+          call.outputs.push_back(std::move(aggregate));
         } else if (type == "image") {
           CodeInterpreterImageOutput image;
           image.index = output.value("index", 0);
+          CodeInterpreterOutput aggregate;
+          aggregate.type = CodeInterpreterOutput::Type::Image;
+          CodeInterpreterImageOutput::ImageData image_data;
           if (output.contains("image") && output["image"].is_object()) {
-            image.file_id = output.at("image").value("file_id", "");
+            const auto& image_json = output.at("image");
+            image.file_id = image_json.value("file_id", "");
+            if (image_json.contains("file_id") && image_json.at("file_id").is_string()) {
+              image_data.file_id = image_json.at("file_id").get<std::string>();
+            }
+          }
+          if (!image_data.file_id && !image.file_id.empty()) {
+            image_data.file_id = image.file_id;
+          }
+          if (image_data.file_id) {
+            image.image = image_data;
+            aggregate.image = image_data;
           }
           call.image_outputs.push_back(image);
+          call.outputs.push_back(std::move(aggregate));
         }
       }
     }
@@ -191,6 +211,7 @@ RunStep parse_run_step_impl(const json& payload) {
   step.status = payload.value("status", "");
   if (payload.contains("step_details") && payload["step_details"].is_object()) {
     step.details = parse_step_details(payload.at("step_details"));
+    step.step_details = step.details;
   }
   step.thread_id = payload.value("thread_id", "");
   if (payload.contains("usage") && payload["usage"].is_object()) {
@@ -250,6 +271,7 @@ RunStepDelta parse_run_step_delta_impl(const json& payload) {
       }
     }
     delta.details = details;
+    delta.step_details = delta.details;
   }
   return delta;
 }

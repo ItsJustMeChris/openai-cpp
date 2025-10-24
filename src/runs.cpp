@@ -135,7 +135,7 @@ json message_content_to_json(const std::variant<std::string, std::vector<ThreadM
   return array;
 }
 
-json attachments_to_json(const std::vector<MessageAttachment>& attachments) {
+json attachments_to_json(const std::vector<RunAdditionalMessageAttachment>& attachments) {
   json array = json::array();
   for (const auto& attachment : attachments) {
     json obj;
@@ -205,8 +205,11 @@ json update_request_to_json(const RunUpdateRequest& request) {
 json submit_tool_outputs_to_json(const RunSubmitToolOutputsRequest& request) {
   json body;
   json outputs = json::array();
-  for (const auto& output : request.outputs) {
-    outputs.push_back(json::object({{"tool_call_id", output.tool_call_id}, {"output", output.output}}));
+  for (const auto& output : request.tool_outputs) {
+    json item = json::object();
+    if (output.tool_call_id) item["tool_call_id"] = *output.tool_call_id;
+    if (output.output) item["output"] = *output.output;
+    outputs.push_back(std::move(item));
   }
   body["tool_outputs"] = std::move(outputs);
   if (request.stream) body["stream"] = *request.stream;
@@ -278,19 +281,30 @@ RunUsage parse_usage(const json& payload) {
 
 RunRequiredAction parse_required_action(const json& payload) {
   RunRequiredAction action;
+  action.raw = payload;
+  const std::string type = payload.value("type", "submit_tool_outputs");
+  if (type == "submit_tool_outputs") {
+    action.type = RunRequiredAction::Type::SubmitToolOutputs;
+  }
   if (payload.contains("submit_tool_outputs") && payload["submit_tool_outputs"].is_object()) {
     const auto& submit = payload.at("submit_tool_outputs");
+    RunRequiredActionSubmitToolOutputs submit_outputs;
+    submit_outputs.raw = submit;
     if (submit.contains("tool_calls") && submit["tool_calls"].is_array()) {
       for (const auto& call : submit.at("tool_calls")) {
-        RunRequiredAction::ToolCall tool_call;
+        RunRequiredActionToolCall tool_call;
+        tool_call.raw = call;
         tool_call.id = call.value("id", "");
+        tool_call.type = call.value("type", "function");
         if (call.contains("function") && call["function"].is_object()) {
           tool_call.function.name = call.at("function").value("name", "");
           tool_call.function.arguments = call.at("function").value("arguments", "");
         }
-        action.tool_calls.push_back(tool_call);
+        submit_outputs.tool_calls.push_back(tool_call);
       }
     }
+    action.submit_tool_outputs = submit_outputs;
+    action.tool_calls = submit_outputs.tool_calls;
   }
   return action;
 }
@@ -934,7 +948,7 @@ Run RunsResource::resolve_required_action(const Run& run,
 
     RunSubmitToolOutputsRequest submit_request;
     submit_request.thread_id = current.thread_id;
-    submit_request.outputs = std::move(outputs);
+    submit_request.tool_outputs = std::move(outputs);
 
     current = submit_tool_outputs_and_poll(current.id, submit_request, options, poll_interval);
   }

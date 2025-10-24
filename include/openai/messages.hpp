@@ -14,13 +14,25 @@ namespace openai {
 
 struct MessageTextAnnotation {
   enum class Type { FileCitation, FilePath, Raw };
+
+  struct FileCitation {
+    std::string file_id;
+    std::optional<std::string> quote;
+  };
+
+  struct FilePath {
+    std::string file_id;
+  };
+
   Type type = Type::Raw;
   std::string text;
+  int start_index = 0;
+  int end_index = 0;
+  std::optional<FileCitation> file_citation;
+  std::optional<FilePath> file_path;
   std::optional<std::string> file_id;
   std::optional<std::string> quote;
   nlohmann::json raw = nlohmann::json::object();
-  int start_index = 0;
-  int end_index = 0;
 };
 
 struct MessageTextContent {
@@ -54,6 +66,11 @@ struct MessageAttachment {
   std::vector<ThreadMessageAttachmentTool> tools;
 };
 
+struct ThreadMessageIncompleteDetails {
+  std::optional<std::string> reason;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct ThreadMessage {
   std::string id;
   std::optional<std::string> assistant_id;
@@ -63,6 +80,7 @@ struct ThreadMessage {
   int created_at = 0;
   std::optional<int> incomplete_at;
   std::optional<std::string> incomplete_reason;
+  std::optional<ThreadMessageIncompleteDetails> incomplete_details;
   std::map<std::string, std::string> metadata;
   std::string object;
   std::string role;

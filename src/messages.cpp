@@ -133,11 +133,24 @@ MessageTextAnnotation parse_annotation(const json& payload) {
   annotation.start_index = payload.value("start_index", 0);
   annotation.end_index = payload.value("end_index", 0);
   if (payload.contains("file_citation") && payload["file_citation"].is_object()) {
-    annotation.file_id = payload.at("file_citation").value("file_id", "");
-    annotation.quote = payload.at("file_citation").value("quote", "");
+    MessageTextAnnotation::FileCitation file_citation;
+    if (payload.at("file_citation").contains("file_id") && payload.at("file_citation").at("file_id").is_string()) {
+      file_citation.file_id = payload.at("file_citation").at("file_id").get<std::string>();
+      annotation.file_id = file_citation.file_id;
+    }
+    if (payload.at("file_citation").contains("quote") && payload.at("file_citation").at("quote").is_string()) {
+      file_citation.quote = payload.at("file_citation").at("quote").get<std::string>();
+      annotation.quote = file_citation.quote;
+    }
+    annotation.file_citation = std::move(file_citation);
   }
   if (payload.contains("file_path") && payload["file_path"].is_object()) {
-    annotation.file_id = payload.at("file_path").value("file_id", "");
+    MessageTextAnnotation::FilePath file_path;
+    if (payload.at("file_path").contains("file_id") && payload.at("file_path").at("file_id").is_string()) {
+      file_path.file_id = payload.at("file_path").at("file_id").get<std::string>();
+      annotation.file_id = file_path.file_id;
+    }
+    annotation.file_path = std::move(file_path);
   }
   return annotation;
 }
@@ -273,7 +286,16 @@ ThreadMessage parse_thread_message_impl(const json& payload) {
     message.incomplete_at = payload["incomplete_at"].get<int>();
   }
   if (payload.contains("incomplete_details") && payload["incomplete_details"].is_object()) {
-    message.incomplete_reason = payload.at("incomplete_details").value("reason", "");
+    ThreadMessageIncompleteDetails details;
+    details.raw = payload.at("incomplete_details");
+    if (details.raw.contains("reason") && details.raw.at("reason").is_string()) {
+      details.reason = details.raw.at("reason").get<std::string>();
+      message.incomplete_reason = details.reason;
+    }
+    message.incomplete_details = std::move(details);
+  }
+  if (!message.incomplete_reason && payload.contains("incomplete_reason") && payload["incomplete_reason"].is_string()) {
+    message.incomplete_reason = payload["incomplete_reason"].get<std::string>();
   }
   if (payload.contains("metadata") && payload["metadata"].is_object()) {
     for (auto it = payload["metadata"].begin(); it != payload["metadata"].end(); ++it) {

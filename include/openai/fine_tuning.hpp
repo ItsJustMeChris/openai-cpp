@@ -301,9 +301,74 @@ struct FineTuningCheckpointListParams {
   std::optional<std::string> after;
 };
 
+struct FineTuningCheckpointPermission {
+  std::string id;
+  int created_at = 0;
+  std::string object;
+  std::string project_id;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct FineTuningCheckpointPermissionList {
+  std::vector<FineTuningCheckpointPermission> data;
+  bool has_more = false;
+  std::string object;
+  std::optional<std::string> first_id;
+  std::optional<std::string> last_id;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct FineTuningCheckpointPermissionCreateParams {
+  std::vector<std::string> project_ids;
+};
+
+struct FineTuningCheckpointPermissionRetrieveParams {
+  std::optional<std::string> after;
+  std::optional<int> limit;
+  std::optional<std::string> order;
+  std::optional<std::string> project_id;
+};
+
+struct FineTuningCheckpointPermissionDeleteResponse {
+  std::string id;
+  bool deleted = false;
+  std::string object;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+class FineTuningJobCheckpointPermissionsResource {
+public:
+  explicit FineTuningJobCheckpointPermissionsResource(OpenAIClient& client) : client_(client) {}
+
+  FineTuningCheckpointPermissionList create(const std::string& checkpoint_id,
+                                            const FineTuningCheckpointPermissionCreateParams& params) const;
+  FineTuningCheckpointPermissionList create(const std::string& checkpoint_id,
+                                            const FineTuningCheckpointPermissionCreateParams& params,
+                                            const RequestOptions& options) const;
+
+  FineTuningCheckpointPermissionList retrieve(const std::string& checkpoint_id,
+                                              const FineTuningCheckpointPermissionRetrieveParams& params) const;
+  FineTuningCheckpointPermissionList retrieve(const std::string& checkpoint_id,
+                                              const FineTuningCheckpointPermissionRetrieveParams& params,
+                                              const RequestOptions& options) const;
+  FineTuningCheckpointPermissionList retrieve(const std::string& checkpoint_id) const;
+  FineTuningCheckpointPermissionList retrieve(const std::string& checkpoint_id,
+                                              const RequestOptions& options) const;
+
+  FineTuningCheckpointPermissionDeleteResponse remove(const std::string& checkpoint_id,
+                                                      const std::string& permission_id) const;
+  FineTuningCheckpointPermissionDeleteResponse remove(const std::string& checkpoint_id,
+                                                      const std::string& permission_id,
+                                                      const RequestOptions& options) const;
+
+private:
+  OpenAIClient& client_;
+};
+
 class FineTuningJobCheckpointsResource {
 public:
-  explicit FineTuningJobCheckpointsResource(OpenAIClient& client) : client_(client) {}
+  explicit FineTuningJobCheckpointsResource(OpenAIClient& client)
+      : client_(client), permissions_(client) {}
 
   FineTuningJobCheckpointList list(const std::string& job_id,
                                    const FineTuningCheckpointListParams& params) const;
@@ -313,8 +378,12 @@ public:
   FineTuningJobCheckpointList list(const std::string& job_id) const;
   FineTuningJobCheckpointList list(const std::string& job_id, const RequestOptions& options) const;
 
+  FineTuningJobCheckpointPermissionsResource& permissions() { return permissions_; }
+  const FineTuningJobCheckpointPermissionsResource& permissions() const { return permissions_; }
+
 private:
   OpenAIClient& client_;
+  FineTuningJobCheckpointPermissionsResource permissions_;
 };
 
 class FineTuningJobsResource {

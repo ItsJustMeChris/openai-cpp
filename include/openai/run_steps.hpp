@@ -20,8 +20,24 @@ struct CodeInterpreterLogOutput {
 };
 
 struct CodeInterpreterImageOutput {
+  struct ImageData {
+    std::optional<std::string> file_id;
+  };
+
   int index = 0;
   std::string file_id;
+  std::optional<ImageData> image;
+};
+
+struct CodeInterpreterOutput {
+  enum class Type {
+    Logs,
+    Image
+  };
+
+  Type type = Type::Logs;
+  std::optional<std::string> logs;
+  std::optional<CodeInterpreterImageOutput::ImageData> image;
 };
 
 struct RunStepLastError {
@@ -34,6 +50,7 @@ struct CodeInterpreterToolCallDetails {
   std::string input;
   std::vector<CodeInterpreterLogOutput> log_outputs;
   std::vector<CodeInterpreterImageOutput> image_outputs;
+  std::vector<CodeInterpreterOutput> outputs;
 };
 
 struct FileSearchRankingOptions {
@@ -107,6 +124,7 @@ struct RunStepDeltaDetails {
 
 struct RunStepDelta {
   std::optional<RunStepDeltaDetails> details;
+  std::optional<RunStepDeltaDetails> step_details;
   nlohmann::json raw = nlohmann::json::object();
 };
 
@@ -137,6 +155,7 @@ struct RunStep {
   std::string run_id;
   std::string status;
   RunStepDetails details;
+  RunStepDetails step_details;
   std::string thread_id;
   std::optional<RunStepUsage> usage;
   nlohmann::json raw = nlohmann::json::object();

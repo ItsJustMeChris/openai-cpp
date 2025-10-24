@@ -135,7 +135,7 @@ TEST(RunsResourceTest, ListAndSubmitToolOutputs) {
 
   RunSubmitToolOutputsRequest submit;
   submit.thread_id = "thread_1";
-  submit.outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call_1", .output = "result"});
+  submit.tool_outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call_1", .output = "result"});
   auto run = client.runs().submit_tool_outputs("run_1", submit);
   EXPECT_EQ(run.status, "in_progress");
 }
@@ -287,7 +287,7 @@ TEST(RunsResourceTest, SubmitToolOutputsStreamCollectsEvents) {
 
   RunSubmitToolOutputsRequest request;
   request.thread_id = "thread_1";
-  request.outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call_1", .output = "{}"});
+  request.tool_outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call_1", .output = "{}"});
 
   auto events = client.runs().submit_tool_outputs_stream("run_1", request);
   ASSERT_EQ(events.size(), 2u);
@@ -348,7 +348,7 @@ TEST(RunsResourceTest, SubmitToolOutputsStreamRequiresThreadId) {
 
   RunSubmitToolOutputsRequest request;
   // thread_id intentionally left empty
-  request.outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call", .output = "{}"});
+  request.tool_outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call", .output = "{}"});
 
   EXPECT_THROW(client.runs().submit_tool_outputs_stream("run_1", request), OpenAIError);
 }
@@ -432,7 +432,7 @@ TEST(RunsResourceTest, SubmitToolOutputsAndPoll) {
 
   RunSubmitToolOutputsRequest request;
   request.thread_id = "thread_1";
-  request.outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call", .output = "result"});
+  request.tool_outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call", .output = "result"});
 
   RequestOptions request_options;
   auto run = client.runs().submit_tool_outputs_and_poll(
@@ -453,7 +453,7 @@ TEST(RunsResourceTest, SubmitToolOutputsRequiresThreadIdForHelper) {
   OpenAIClient client(options, std::move(mock_client));
 
   RunSubmitToolOutputsRequest request;
-  request.outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call", .output = "{}"});
+  request.tool_outputs.push_back(RunSubmitToolOutput{.tool_call_id = "call", .output = "{}"});
 
   EXPECT_THROW(client.runs().submit_tool_outputs("run_1", request), OpenAIError);
 }

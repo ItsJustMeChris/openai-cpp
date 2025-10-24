@@ -698,6 +698,54 @@ FineTuningJobCheckpointList parse_checkpoint_list(const json& payload) {
   return list;
 }
 
+FineTuningCheckpointPermission parse_checkpoint_permission(const json& payload) {
+  FineTuningCheckpointPermission permission;
+  permission.raw = payload;
+  permission.id = payload.value("id", "");
+  permission.created_at = payload.value("created_at", 0);
+  permission.object = payload.value("object", "");
+  permission.project_id = payload.value("project_id", "");
+  return permission;
+}
+
+FineTuningCheckpointPermissionList parse_checkpoint_permission_list(const json& payload) {
+  FineTuningCheckpointPermissionList list;
+  list.raw = payload;
+  list.has_more = payload.value("has_more", false);
+  list.object = payload.value("object", "");
+  if (payload.contains("first_id") && payload.at("first_id").is_string()) {
+    list.first_id = payload.at("first_id").get<std::string>();
+  }
+  if (payload.contains("last_id") && payload.at("last_id").is_string()) {
+    list.last_id = payload.at("last_id").get<std::string>();
+  }
+  if (payload.contains("data") && payload.at("data").is_array()) {
+    for (const auto& entry : payload.at("data")) {
+      list.data.push_back(parse_checkpoint_permission(entry));
+    }
+  }
+  return list;
+}
+
+FineTuningCheckpointPermissionDeleteResponse parse_checkpoint_permission_delete_response(const json& payload) {
+  FineTuningCheckpointPermissionDeleteResponse response;
+  response.raw = payload;
+  response.id = payload.value("id", "");
+  response.deleted = payload.value("deleted", false);
+  response.object = payload.value("object", "");
+  return response;
+}
+
+json checkpoint_permission_create_to_json(const FineTuningCheckpointPermissionCreateParams& params) {
+  json body = json::object();
+  json projects = json::array();
+  for (const auto& project_id : params.project_ids) {
+    projects.push_back(project_id);
+  }
+  body["project_ids"] = std::move(projects);
+  return body;
+}
+
 json job_create_to_json(const JobCreateParams& request) {
   json body = json::object();
   body["model"] = request.model;
@@ -748,6 +796,10 @@ std::string job_events_path(const std::string& job_id) {
 
 std::string job_checkpoints_path(const std::string& job_id) {
   return jobs_path(job_id) + "/checkpoints";
+}
+
+std::string checkpoint_permissions_path(const std::string& checkpoint_id) {
+  return "/fine_tuning/checkpoints/" + checkpoint_id + "/permissions";
 }
 
 }  // namespace
@@ -1025,6 +1077,80 @@ GraderValidateResponse FineTuningAlphaGradersResource::validate(const GraderVali
     return parse_grader_validate_response(json::parse(response.body));
   } catch (const json::exception& ex) {
     throw OpenAIError(std::string("Failed to parse grader validate response: ") + ex.what());
+  }
+}
+
+FineTuningCheckpointPermissionList FineTuningJobCheckpointPermissionsResource::create(
+    const std::string& checkpoint_id, const FineTuningCheckpointPermissionCreateParams& params) const {
+  return create(checkpoint_id, params, RequestOptions{});
+}
+
+FineTuningCheckpointPermissionList FineTuningJobCheckpointPermissionsResource::create(
+    const std::string& checkpoint_id,
+    const FineTuningCheckpointPermissionCreateParams& params,
+    const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  auto body = checkpoint_permission_create_to_json(params).dump();
+  auto response =
+      client_.perform_request("POST", checkpoint_permissions_path(checkpoint_id), body, request_options);
+  try {
+    return parse_checkpoint_permission_list(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse checkpoint permission create response: ") + ex.what());
+  }
+}
+
+FineTuningCheckpointPermissionList FineTuningJobCheckpointPermissionsResource::retrieve(
+    const std::string& checkpoint_id, const FineTuningCheckpointPermissionRetrieveParams& params) const {
+  return retrieve(checkpoint_id, params, RequestOptions{});
+}
+
+FineTuningCheckpointPermissionList FineTuningJobCheckpointPermissionsResource::retrieve(
+    const std::string& checkpoint_id,
+    const FineTuningCheckpointPermissionRetrieveParams& params,
+    const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  if (params.after) request_options.query_params["after"] = *params.after;
+  if (params.limit) request_options.query_params["limit"] = std::to_string(*params.limit);
+  if (params.order) request_options.query_params["order"] = *params.order;
+  if (params.project_id) request_options.query_params["project_id"] = *params.project_id;
+
+  auto response = client_.perform_request("GET", checkpoint_permissions_path(checkpoint_id), "", request_options);
+  try {
+    return parse_checkpoint_permission_list(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse checkpoint permission retrieve response: ") + ex.what());
+  }
+}
+
+FineTuningCheckpointPermissionList FineTuningJobCheckpointPermissionsResource::retrieve(
+    const std::string& checkpoint_id) const {
+  return retrieve(checkpoint_id, FineTuningCheckpointPermissionRetrieveParams{});
+}
+
+FineTuningCheckpointPermissionList FineTuningJobCheckpointPermissionsResource::retrieve(
+    const std::string& checkpoint_id, const RequestOptions& options) const {
+  return retrieve(checkpoint_id, FineTuningCheckpointPermissionRetrieveParams{}, options);
+}
+
+FineTuningCheckpointPermissionDeleteResponse FineTuningJobCheckpointPermissionsResource::remove(
+    const std::string& checkpoint_id, const std::string& permission_id) const {
+  return remove(checkpoint_id, permission_id, RequestOptions{});
+}
+
+FineTuningCheckpointPermissionDeleteResponse FineTuningJobCheckpointPermissionsResource::remove(
+    const std::string& checkpoint_id,
+    const std::string& permission_id,
+    const RequestOptions& options) const {
+  RequestOptions request_options = options;
+  auto response = client_.perform_request("DELETE",
+                                          checkpoint_permissions_path(checkpoint_id) + "/" + permission_id,
+                                          "",
+                                          request_options);
+  try {
+    return parse_checkpoint_permission_delete_response(json::parse(response.body));
+  } catch (const json::exception& ex) {
+    throw OpenAIError(std::string("Failed to parse checkpoint permission delete response: ") + ex.what());
   }
 }
 

@@ -42,16 +42,32 @@ struct RunLastError {
   std::string message;
 };
 
+struct RunRequiredActionFunctionCall {
+  std::string name;
+  std::string arguments;
+};
+
+struct RunRequiredActionToolCall {
+  std::string id;
+  std::string type;
+  RunRequiredActionFunctionCall function;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct RunRequiredActionSubmitToolOutputs {
+  std::vector<RunRequiredActionToolCall> tool_calls;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct RunRequiredAction {
-  struct ToolCall {
-    std::string id;
-    struct FunctionCall {
-      std::string name;
-      std::string arguments;
-    } function;
+  enum class Type {
+    SubmitToolOutputs
   };
 
-  std::vector<ToolCall> tool_calls;
+  Type type = Type::SubmitToolOutputs;
+  std::optional<RunRequiredActionSubmitToolOutputs> submit_tool_outputs;
+  std::vector<RunRequiredActionToolCall> tool_calls;
+  nlohmann::json raw = nlohmann::json::object();
 };
 
 struct RunIncompleteDetails {
@@ -97,10 +113,15 @@ struct RunList {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct RunAdditionalMessageAttachment {
+  std::string file_id;
+  std::vector<ThreadMessageAttachmentTool> tools;
+};
+
 struct RunAdditionalMessage {
   std::string role;
   std::variant<std::string, std::vector<ThreadMessageContentPart>> content;
-  std::vector<MessageAttachment> attachments;
+  std::vector<RunAdditionalMessageAttachment> attachments;
   std::map<std::string, std::string> metadata;
 };
 
@@ -147,13 +168,13 @@ struct RunCancelParams {
 };
 
 struct RunSubmitToolOutput {
-  std::string tool_call_id;
-  std::string output;
+  std::optional<std::string> output;
+  std::optional<std::string> tool_call_id;
 };
 
 struct RunSubmitToolOutputsRequest {
   std::string thread_id;
-  std::vector<RunSubmitToolOutput> outputs;
+  std::vector<RunSubmitToolOutput> tool_outputs;
   std::optional<bool> stream;
 };
 
