@@ -49,6 +49,9 @@ add_executable(openai-cpp-tests
     ${CMAKE_CURRENT_LIST_DIR}/beta_threads_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/network/live/chat/completions/completions.test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/network/live/chat/completions/messages.test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/network/live/audio/transcriptions.test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/network/live/audio/translations.test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/network/live/audio/speech.test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/uploads_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/fine_tuning_graders_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/evals_test.cpp

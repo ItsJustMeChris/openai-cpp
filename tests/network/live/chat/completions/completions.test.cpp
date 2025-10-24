@@ -4,7 +4,7 @@
 #include "openai/client.hpp"
 #include "openai/error.hpp"
 #include "openai/models.hpp"
-#include "network/live/chat/completions/live_test_utils.hpp"
+#include "network/live/live_test_utils.hpp"
 
 #include <algorithm>
 #include <chrono>
