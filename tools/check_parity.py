@@ -57,6 +57,10 @@ DEFAULT_RESOURCES = [
 
 IGNORED_FIELDS: Set[str] = {"static"}
 
+FIELD_ALIASES = {
+    "template_messages": "template",
+}
+
 PROP_PATTERN = re.compile(r"(?<!\[)(?<!\.)\b([A-Za-z_][A-Za-z0-9_]*)\??:\s")
 STRUCT_PATTERN = re.compile(r"struct\s+[A-Za-z0-9_]+\s*{")
 FIELD_PATTERN = re.compile(r"[A-Za-z0-9_:<> ,]+\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|;)")
@@ -146,7 +150,9 @@ def extract_cpp_fields(resource: str) -> Set[str]:
                     continue
                 field_match = FIELD_PATTERN.search(part)
                 if field_match:
-                    fields.add(field_match.group(1))
+                    name = field_match.group(1)
+                    name = FIELD_ALIASES.get(name, name)
+                    fields.add(name)
         search_pos = brace_index + len(block)
 
     return fields

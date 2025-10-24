@@ -15,6 +15,10 @@ namespace graders {
 
 struct LabelModelGraderMessageContent {
   std::string type;
+  std::optional<std::string> content;
+  std::optional<std::string> text;
+  std::optional<std::string> image_url;
+  std::optional<std::string> detail;
   nlohmann::json data = nlohmann::json::object();
 };
 
@@ -22,6 +26,7 @@ struct LabelModelGraderInput {
   std::string role;
   nlohmann::json content = nlohmann::json::array();
   std::optional<std::string> type;
+  std::vector<LabelModelGraderMessageContent> parsed_content;
 };
 
 struct LabelModelGrader {
@@ -60,10 +65,13 @@ struct ScoreModelGraderInput {
   std::string role;
   nlohmann::json content = nlohmann::json::array();
   std::optional<std::string> type;
+  std::vector<LabelModelGraderMessageContent> parsed_content;
 };
 
 struct ScoreModelGraderSamplingParams {
-  std::optional<int> max_tokens;
+  std::optional<int> max_completions_tokens;
+  std::optional<std::string> reasoning_effort;
+  std::optional<int> seed;
   std::optional<double> temperature;
   std::optional<double> top_p;
 };
@@ -104,4 +112,3 @@ private:
 };
 
 }  // namespace openai
-

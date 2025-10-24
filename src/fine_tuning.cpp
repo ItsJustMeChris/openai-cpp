@@ -330,7 +330,11 @@ json score_model_to_json(const graders::ScoreModelGrader& grader) {
   if (grader.range) payload["range"] = *grader.range;
   if (grader.sampling_params) {
     json sampling = json::object();
-    if (grader.sampling_params->max_tokens) sampling["max_tokens"] = *grader.sampling_params->max_tokens;
+    if (grader.sampling_params->max_completions_tokens)
+      sampling["max_completions_tokens"] = *grader.sampling_params->max_completions_tokens;
+    if (grader.sampling_params->reasoning_effort)
+      sampling["reasoning_effort"] = *grader.sampling_params->reasoning_effort;
+    if (grader.sampling_params->seed) sampling["seed"] = *grader.sampling_params->seed;
     if (grader.sampling_params->temperature) sampling["temperature"] = *grader.sampling_params->temperature;
     if (grader.sampling_params->top_p) sampling["top_p"] = *grader.sampling_params->top_p;
     payload["sampling_params"] = std::move(sampling);
@@ -439,8 +443,15 @@ graders::ScoreModelGrader parse_score_model_grader(const json& payload) {
   if (payload.contains("sampling_params") && payload.at("sampling_params").is_object()) {
     graders::ScoreModelGraderSamplingParams params;
     const auto& sampling = payload.at("sampling_params");
-    if (sampling.contains("max_tokens") && sampling.at("max_tokens").is_number_integer()) {
-      params.max_tokens = sampling.at("max_tokens").get<int>();
+    if (sampling.contains("max_completions_tokens") &&
+        sampling.at("max_completions_tokens").is_number_integer()) {
+      params.max_completions_tokens = sampling.at("max_completions_tokens").get<int>();
+    }
+    if (sampling.contains("reasoning_effort") && sampling.at("reasoning_effort").is_string()) {
+      params.reasoning_effort = sampling.at("reasoning_effort").get<std::string>();
+    }
+    if (sampling.contains("seed") && sampling.at("seed").is_number_integer()) {
+      params.seed = sampling.at("seed").get<int>();
     }
     if (sampling.contains("temperature") && sampling.at("temperature").is_number()) {
       params.temperature = sampling.at("temperature").get<double>();

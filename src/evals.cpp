@@ -183,8 +183,14 @@ json python_grader_base_to_json(const graders::PythonGrader& grader) {
 
 graders::ScoreModelGraderSamplingParams parse_score_sampling_params(const json& payload) {
   graders::ScoreModelGraderSamplingParams params;
-  if (payload.contains("max_tokens") && payload.at("max_tokens").is_number_integer()) {
-    params.max_tokens = payload.at("max_tokens").get<int>();
+  if (payload.contains("max_completions_tokens") && payload.at("max_completions_tokens").is_number_integer()) {
+    params.max_completions_tokens = payload.at("max_completions_tokens").get<int>();
+  }
+  if (payload.contains("reasoning_effort") && payload.at("reasoning_effort").is_string()) {
+    params.reasoning_effort = payload.at("reasoning_effort").get<std::string>();
+  }
+  if (payload.contains("seed") && payload.at("seed").is_number_integer()) {
+    params.seed = payload.at("seed").get<int>();
   }
   if (payload.contains("temperature") && payload.at("temperature").is_number()) {
     params.temperature = payload.at("temperature").get<double>();
@@ -197,7 +203,9 @@ graders::ScoreModelGraderSamplingParams parse_score_sampling_params(const json& 
 
 json score_sampling_params_to_json(const graders::ScoreModelGraderSamplingParams& params) {
   json value;
-  if (params.max_tokens) value["max_tokens"] = *params.max_tokens;
+  if (params.max_completions_tokens) value["max_completions_tokens"] = *params.max_completions_tokens;
+  if (params.reasoning_effort) value["reasoning_effort"] = *params.reasoning_effort;
+  if (params.seed) value["seed"] = *params.seed;
   if (params.temperature) value["temperature"] = *params.temperature;
   if (params.top_p) value["top_p"] = *params.top_p;
   return value;
@@ -577,8 +585,12 @@ evals::RunResponsesSource parse_responses_source(const json& payload) {
 
 evals::RunTemplate parse_template(const json& payload) {
   evals::RunTemplate templ;
-  if (payload.contains("template")) {
-    templ.entries = payload.at("template");
+  templ.raw = payload;
+  templ.type = payload.value("type", "template");
+  if (payload.contains("template") && payload.at("template").is_array()) {
+    for (const auto& entry : payload.at("template")) {
+      templ.template_messages.push_back(entry);
+    }
   }
   return templ;
 }
@@ -749,8 +761,12 @@ json run_responses_source_to_json(const evals::RunResponsesSource& source) {
 
 json run_template_to_json(const evals::RunTemplate& templ) {
   json payload;
-  payload["type"] = "template";
-  payload["template"] = templ.entries;
+  payload["type"] = templ.type.empty() ? "template" : templ.type;
+  json entries = json::array();
+  for (const auto& message : templ.template_messages) {
+    entries.push_back(message);
+  }
+  payload["template"] = std::move(entries);
   return payload;
 }
 

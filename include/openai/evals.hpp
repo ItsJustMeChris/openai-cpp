@@ -23,23 +23,23 @@ namespace evals {
 using Metadata = std::map<std::string, std::string>;
 
 struct CustomDataSourceConfig {
-  nlohmann::json schema = nlohmann::json::object();
+  nlohmann::json schema;
   std::string type = "custom";
-  nlohmann::json raw = nlohmann::json::object();
+  nlohmann::json raw;
 };
 
 struct LogsDataSourceConfig {
-  nlohmann::json schema = nlohmann::json::object();
+  nlohmann::json schema;
   std::optional<Metadata> metadata;
   std::string type = "logs";
-  nlohmann::json raw = nlohmann::json::object();
+  nlohmann::json raw;
 };
 
 struct StoredCompletionsDataSourceConfig {
-  nlohmann::json schema = nlohmann::json::object();
+  nlohmann::json schema;
   std::optional<Metadata> metadata;
   std::string type = "stored_completions";
-  nlohmann::json raw = nlohmann::json::object();
+  nlohmann::json raw;
 };
 
 using DataSourceConfig =
@@ -47,28 +47,53 @@ using DataSourceConfig =
 
 struct LabelModelGrader {
   graders::LabelModelGrader grader;
+  std::vector<graders::LabelModelGraderInput> input;
+  std::vector<std::string> labels;
+  std::string model;
+  std::string name;
+  std::vector<std::string> passing_labels;
+  std::string type;
   nlohmann::json raw = nlohmann::json::object();
 };
 
 struct StringCheckGrader {
   graders::StringCheckGrader grader;
+  std::string input;
+  std::string name;
+  std::string operation;
+  std::string reference;
+  std::string type;
   nlohmann::json raw = nlohmann::json::object();
 };
 
 struct TextSimilarityGrader {
   graders::TextSimilarityGrader grader;
+  std::string evaluation_metric;
+  std::string input;
+  std::string name;
+  std::string reference;
+  std::string type;
   double pass_threshold = 0.0;
   nlohmann::json raw = nlohmann::json::object();
 };
 
 struct PythonGrader {
   graders::PythonGrader grader;
+  std::string name;
+  std::string source;
+  std::string type;
   std::optional<double> pass_threshold;
   nlohmann::json raw = nlohmann::json::object();
 };
 
 struct ScoreModelGrader {
   graders::ScoreModelGrader grader;
+  std::vector<graders::ScoreModelGraderInput> input;
+  std::optional<std::vector<double>> range;
+  std::string model;
+  std::string name;
+  std::string type;
+  std::optional<graders::ScoreModelGraderSamplingParams> sampling_params;
   std::optional<double> pass_threshold;
   nlohmann::json raw = nlohmann::json::object();
 };
@@ -104,7 +129,7 @@ struct EvaluationDeleteResponse {
 };
 
 struct CreateCustomDataSourceConfig {
-  nlohmann::json item_schema = nlohmann::json::object();
+  nlohmann::json item_schema;
   std::string type = "custom";
   std::optional<bool> include_sample_schema;
 };
@@ -144,6 +169,8 @@ struct EvaluationListParams {
 struct JSONLContentRow {
   nlohmann::json item = nlohmann::json::object();
   std::optional<nlohmann::json> sample;
+  std::optional<std::string> detail;
+  std::optional<std::string> image_url;
 };
 
 struct RunFileContentSource {
@@ -183,7 +210,9 @@ struct RunItemReference {
 };
 
 struct RunTemplate {
-  nlohmann::json entries = nlohmann::json::array();
+  std::vector<nlohmann::json> template_messages;
+  std::string type = "template";
+  nlohmann::json raw = nlohmann::json::object();
 };
 
 struct RunSamplingParams {
@@ -195,6 +224,7 @@ struct RunSamplingParams {
   std::vector<nlohmann::json> tools;
   std::optional<double> top_p;
   std::optional<nlohmann::json> response_format;
+  std::optional<std::string> format;
 };
 
 struct CreateCompletionsRunDataSource {
@@ -243,6 +273,14 @@ struct RunResultCounts {
   int failed = 0;
   int passed = 0;
   int total = 0;
+};
+
+struct RunOutputItem {
+  nlohmann::json datasource_item;
+  int datasource_item_id = 0;
+  std::optional<nlohmann::json> item;
+  std::optional<nlohmann::json> sample;
+  nlohmann::json raw;
 };
 
 struct EvalAPIError {
@@ -349,13 +387,13 @@ struct OutputItemSample {
   double temperature = 0.0;
   double top_p = 0.0;
   OutputItemSampleUsage usage;
-  nlohmann::json raw = nlohmann::json::object();
+  nlohmann::json raw;
 };
 
 struct OutputItem {
   std::string id;
   int created_at = 0;
-  nlohmann::json datasource_item = nlohmann::json::object();
+  nlohmann::json datasource_item;
   int datasource_item_id = 0;
   std::string eval_id;
   std::string object;
@@ -363,14 +401,14 @@ struct OutputItem {
   std::string run_id;
   OutputItemSample sample;
   std::string status;
-  nlohmann::json raw = nlohmann::json::object();
+  nlohmann::json raw;
 };
 
 struct OutputItemList {
   std::vector<OutputItem> data;
   bool has_more = false;
   std::optional<std::string> next_cursor;
-  nlohmann::json raw = nlohmann::json::object();
+  nlohmann::json raw;
 };
 
 struct OutputItemListParams {

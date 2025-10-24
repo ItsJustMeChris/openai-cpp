@@ -241,6 +241,7 @@ private:
   friend class VideosResource;
   friend class FineTuningJobsResource;
   friend class FineTuningJobCheckpointsResource;
+  friend class FineTuningJobCheckpointPermissionsResource;
   friend class FineTuningResource;
   friend class FineTuningAlphaGradersResource;
   friend class WebhooksResource;
