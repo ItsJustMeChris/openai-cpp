@@ -59,7 +59,7 @@ TEST(BetaChatKitSessionsTest, CreateSendsHeaderAndSerializesBody) {
 
   EXPECT_EQ(session.id, "cksess_123");
   EXPECT_EQ(session.user, "user-123");
-  EXPECT_EQ(session.status, "active");
+  EXPECT_EQ(session.status, beta::ChatKitSessionStatus::Active);
   ASSERT_TRUE(session.client_secret.has_value());
   EXPECT_EQ(*session.client_secret, "secret");
 }
@@ -79,7 +79,7 @@ TEST(BetaChatKitSessionsTest, CancelUsesCorrectEndpoint) {
   EXPECT_EQ(request.method, "POST");
   EXPECT_NE(request.url.find("/chatkit/sessions/cksess_123/cancel"), std::string::npos);
   EXPECT_EQ(request.headers.at("OpenAI-Beta"), "chatkit_beta=v1");
-  EXPECT_EQ(session.status, "cancelled");
+  EXPECT_EQ(session.status, beta::ChatKitSessionStatus::Cancelled);
 }
 
 TEST(BetaChatKitThreadsTest, RetrieveAndListUseBetaHeader) {

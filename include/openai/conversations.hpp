@@ -4,9 +4,12 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <nlohmann/json.hpp>
+
+#include "openai/responses.hpp"
 
 namespace openai {
 
@@ -14,6 +17,43 @@ struct RequestOptions;
 template <typename Item>
 class CursorPage;
 class OpenAIClient;
+
+struct ComputerScreenshotContent {
+  std::optional<std::string> file_id;
+  std::optional<std::string> image_url;
+  std::string type;
+};
+
+struct ConversationMessageContent {
+  enum class Kind {
+    InputText,
+    OutputText,
+    Text,
+    SummaryText,
+    ReasoningText,
+    OutputRefusal,
+    InputImage,
+    ComputerScreenshot,
+    InputFile,
+    Unknown
+  };
+
+  Kind kind = Kind::Unknown;
+  std::optional<std::string> text;
+  std::optional<ComputerScreenshotContent> computer_screenshot;
+  std::optional<std::string> image_url;
+  std::optional<std::string> file_id;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ConversationMessage {
+  std::string id;
+  std::vector<ConversationMessageContent> content;
+  std::string role;
+  std::string status;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
 
 struct Conversation {
   std::string id;
@@ -31,6 +71,7 @@ struct ConversationDeleted {
 };
 
 struct ConversationCreateParams {
+  std::optional<std::vector<ResponseInputItem>> items;
   std::optional<std::map<std::string, std::string>> metadata;
 };
 
@@ -38,20 +79,147 @@ struct ConversationUpdateParams {
   std::optional<std::map<std::string, std::string>> metadata;
 };
 
-struct ConversationItem {
+struct ConversationLocalShellCallAction {
+  std::vector<std::string> command;
+  std::map<std::string, std::string> env;
+  std::optional<int> timeout_ms;
+  std::optional<std::string> user;
+  std::optional<std::string> working_directory;
   std::string type;
+};
+
+struct ConversationLocalShellCall {
+  std::string id;
+  ConversationLocalShellCallAction action;
+  std::string call_id;
+  std::string status;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ConversationLocalShellCallOutput {
+  std::string id;
+  std::string output;
+  std::optional<std::string> status;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ConversationMcpListTool {
+  std::string name;
+  nlohmann::json input_schema = {};
+  std::optional<nlohmann::json> annotations;
+  std::optional<std::string> description;
+};
+
+struct ConversationMcpListTools {
+  std::string id;
+  std::string server_label;
+  std::vector<ConversationMcpListTool> tools;
+  std::string type;
+  std::optional<std::string> error;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ConversationMcpApprovalRequest {
+  std::string id;
+  std::string arguments;
+  std::string name;
+  std::string server_label;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ConversationMcpApprovalResponse {
+  std::string id;
+  std::string approval_request_id;
+  bool approve = false;
+  std::string type;
+  std::optional<std::string> reason;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ConversationMcpCall {
+  std::string id;
+  std::string arguments;
+  std::string name;
+  std::string server_label;
+  std::optional<std::string> approval_request_id;
+  std::optional<std::string> error;
+  std::optional<std::string> output;
+  std::optional<std::string> status;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ConversationImageGenerationCall {
+  std::string id;
+  std::optional<std::string> result;
+  std::string status;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ConversationItem {
+  enum class Kind {
+    Message,
+    FunctionToolCall,
+    FunctionToolCallOutput,
+    FileSearchToolCall,
+    FunctionWebSearch,
+    ImageGenerationCall,
+    ComputerToolCall,
+    ComputerToolCallOutput,
+    Reasoning,
+    CodeInterpreterToolCall,
+    LocalShellCall,
+    LocalShellCallOutput,
+    McpListTools,
+    McpApprovalRequest,
+    McpApprovalResponse,
+    McpCall,
+    CustomToolCall,
+    Unknown
+  };
+
+  Kind kind = Kind::Unknown;
+  std::string type;
+  std::optional<ConversationMessage> message;
+  std::optional<ResponseFunctionToolCall> function_tool_call;
+  std::optional<ResponseFunctionToolCallOutput> function_tool_call_output;
+  std::optional<ResponseFileSearchToolCall> file_search_tool_call;
+  std::optional<ResponseFunctionWebSearch> function_web_search;
+  std::optional<ConversationImageGenerationCall> image_generation_call;
+  std::optional<ResponseComputerToolCall> computer_tool_call;
+  std::optional<ResponseComputerToolCallOutput> computer_tool_call_output;
+  std::optional<ResponseReasoningItemDetails> reasoning;
+  std::optional<ResponseCodeInterpreterToolCall> code_interpreter_tool_call;
+  std::optional<ConversationLocalShellCall> local_shell_call;
+  std::optional<ConversationLocalShellCallOutput> local_shell_output;
+  std::optional<ConversationMcpListTools> mcp_list_tools;
+  std::optional<ConversationMcpApprovalRequest> mcp_approval_request;
+  std::optional<ConversationMcpApprovalResponse> mcp_approval_response;
+  std::optional<ConversationMcpCall> mcp_call;
+  std::optional<ResponseCustomToolCall> custom_tool_call;
   nlohmann::json raw = nlohmann::json::object();
 };
 
 struct ConversationItemList {
   std::vector<ConversationItem> data;
+  std::optional<std::string> first_id;
+  bool has_more = false;
+  std::optional<std::string> last_id;
+  std::string object;
   nlohmann::json raw = nlohmann::json::object();
 };
 
-struct ConversationItemPage {
+struct ConversationItemsPage {
   std::vector<ConversationItem> data;
+  std::optional<std::string> first_id;
   bool has_more = false;
+  std::optional<std::string> last_id;
   std::optional<std::string> next_cursor;
+  std::string object;
   nlohmann::json raw = nlohmann::json::object();
 };
 
@@ -62,8 +230,8 @@ struct ConversationListParams {
 };
 
 struct ItemCreateParams {
+  std::vector<ResponseInputItem> items;
   std::optional<std::vector<std::string>> include;
-  nlohmann::json body = nlohmann::json::object();
 };
 
 struct ItemRetrieveParams {
@@ -128,11 +296,11 @@ public:
                             const ItemRetrieveParams& params,
                             const RequestOptions& options) const;
 
-  ConversationItemPage list(const std::string& conversation_id, const ItemListParams& params) const;
-  ConversationItemPage list(const std::string& conversation_id,
-                            const ItemListParams& params,
-                            const RequestOptions& options) const;
-  ConversationItemPage list(const std::string& conversation_id) const;
+  ConversationItemsPage list(const std::string& conversation_id, const ItemListParams& params) const;
+  ConversationItemsPage list(const std::string& conversation_id,
+                             const ItemListParams& params,
+                             const RequestOptions& options) const;
+  ConversationItemsPage list(const std::string& conversation_id) const;
 
   CursorPage<ConversationItem> list_page(const std::string& conversation_id, const ItemListParams& params) const;
   CursorPage<ConversationItem> list_page(const std::string& conversation_id,

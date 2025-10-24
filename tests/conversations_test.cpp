@@ -63,7 +63,14 @@ TEST(ConversationsResourceTest, ItemsCreateIncludesQuery) {
 
   ItemCreateParams params;
   params.include = std::vector<std::string>{"response"};
-  params.body = nlohmann::json{{"type", "message"}, {"role", "user"}, {"content", nlohmann::json::array()}};
+  ResponseInputItem item;
+  item.type = ResponseInputItem::Type::Message;
+  item.message.role = "user";
+  ResponseInputContent content;
+  content.type = ResponseInputContent::Type::Text;
+  content.text = "";
+  item.message.content.push_back(content);
+  params.items.push_back(item);
 
   auto items = client.conversations().items().create("conv_123", params);
   ASSERT_EQ(items.data.size(), 1u);
@@ -72,7 +79,10 @@ TEST(ConversationsResourceTest, ItemsCreateIncludesQuery) {
   const auto& request = *mock_ptr->last_request();
   EXPECT_NE(request.url.find("include=response"), std::string::npos);
   auto payload = nlohmann::json::parse(request.body);
-  EXPECT_EQ(payload.at("type"), "message");
+  ASSERT_TRUE(payload.contains("items"));
+  ASSERT_FALSE(payload.at("items").empty());
+  EXPECT_EQ(payload.at("items")[0].at("role"), "user");
+  EXPECT_EQ(payload.at("items")[0].at("content")[0].at("type"), "input_text");
 }
 
 TEST(ConversationsResourceTest, ItemsListHandlesCursor) {

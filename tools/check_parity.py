@@ -28,6 +28,8 @@ MANUAL_TS_MAP: Dict[str, Iterable[str]] = {
 MANUAL_CPP_MAP: Dict[str, Iterable[str]] = {
     "assistants": ["assistants.hpp", "runs.hpp"],
     "assistant_stream": ["runs.hpp", "assistants.hpp"],
+    "conversations": ["conversations.hpp", "responses.hpp"],
+    "threads": ["threads.hpp", "thread_types.hpp", "runs.hpp"],
 }
 
 DEFAULT_RESOURCES = [

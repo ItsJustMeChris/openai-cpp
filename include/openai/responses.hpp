@@ -238,6 +238,9 @@ struct ResponseImageGenerationToolDefinition {
   std::optional<std::string> moderation;
   std::optional<int> output_compression;
   std::optional<std::string> output_format;
+  std::optional<int> partial_images;
+  std::optional<std::string> quality;
+  std::optional<std::string> size;
   std::optional<std::string> visual_quality;
   std::optional<int> width;
   std::optional<int> height;
@@ -266,6 +269,7 @@ struct ResponseMcpToolDefinition {
   std::string server_label;
   std::optional<std::vector<std::string>> allowed_tool_names;
   std::optional<ResponseMcpToolFilter> allowed_tool_filter;
+  std::optional<nlohmann::json> allowed_tools;
   std::optional<std::string> authorization;
   std::optional<std::string> connector_id;
   std::map<std::string, std::string> headers;
@@ -355,12 +359,20 @@ struct ResponseCodeInterpreterImageOutput {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct ResponseOutputAudio {
+  std::string data;
+  std::string transcript;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct ResponseCodeInterpreterToolCall {
   std::string id;
   std::optional<std::string> code;
   std::string container_id;
   std::vector<ResponseCodeInterpreterLogOutput> log_outputs;
   std::vector<ResponseCodeInterpreterImageOutput> image_outputs;
+  std::optional<std::vector<nlohmann::json>> outputs;
   std::optional<std::string> status;
   nlohmann::json raw = nlohmann::json::object();
 };
@@ -488,7 +500,7 @@ struct ResponseMcpCall {
 
 struct ResponseMcpListToolsItem {
   std::string name;
-  nlohmann::json input_schema = nlohmann::json::object();
+  nlohmann::json input_schema = {};
   std::optional<std::string> description;
   std::optional<std::vector<std::string>> tags;
   nlohmann::json raw = nlohmann::json::object();
@@ -528,6 +540,7 @@ struct ResponseMcpApprovalResponse {
 
   std::string id;
   Decision decision = Decision::Unknown;
+  std::optional<bool> approve;
   std::optional<std::string> reason;
   nlohmann::json raw = nlohmann::json::object();
 };
@@ -709,6 +722,7 @@ struct ResponseOutputItem {
   std::optional<ResponseComputerToolCallOutput> computer_call_output;
   std::optional<ResponseCodeInterpreterToolCall> code_interpreter_call;
   std::optional<ResponseImageGenerationCall> image_generation_call;
+  std::optional<ResponseOutputAudio> audio;
   std::optional<ResponseReasoningItemDetails> reasoning;
   std::optional<ResponseCustomToolCall> custom_tool_call;
   std::optional<ResponseLocalShellCall> local_shell_call;
@@ -725,6 +739,7 @@ struct Response {
   std::string id;
   std::string object;
   int created = 0;
+  int created_at = 0;
   std::string model;
   std::optional<std::string> status;
   std::optional<ResponseError> error;
@@ -816,9 +831,26 @@ struct ResponseInputItem {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct ResponseFormatTextJSONSchemaConfig {
+  std::string name;
+  nlohmann::json schema = {};
+  std::string type;
+  std::optional<std::string> description;
+  std::optional<bool> strict;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseTextConfig {
+  std::optional<nlohmann::json> format;
+  std::optional<ResponseFormatTextJSONSchemaConfig> json_schema_format;
+  std::optional<std::string> verbosity;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct ResponsePrompt {
   std::string id;
-  std::map<std::string, std::string> variables;
+  nlohmann::json variables = {};
+  std::optional<std::string> version;
   nlohmann::json extra = nlohmann::json::object();
 };
 
@@ -829,6 +861,7 @@ struct ResponseReasoningConfig {
 
 struct ResponseStreamOptions {
   std::optional<bool> include_usage;
+  std::optional<bool> include_obfuscation;
   nlohmann::json extra = nlohmann::json::object();
 };
 
@@ -855,10 +888,14 @@ struct ResponseRequest {
   std::optional<double> top_p;
   std::vector<ResponseToolDefinition> tools;
   std::optional<ResponseToolChoice> tool_choice;
+  std::optional<ResponseTextConfig> text;
+  std::optional<std::string> truncation;
 };
 
 struct ResponseRetrieveOptions {
   bool stream = false;
+  std::optional<bool> include_obfuscation;
+  std::optional<int> starting_after;
 };
 
 struct ResponseList {
@@ -949,6 +986,79 @@ struct ResponseReasoningTextDoneEvent {
   nlohmann::json raw = nlohmann::json::object();
 };
 
+struct ResponseOutputTextAnnotationAddedEvent {
+  nlohmann::json annotation = {};
+  int annotation_index = 0;
+  int content_index = 0;
+  std::string item_id;
+  int output_index = 0;
+  int sequence_number = 0;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseImageGenCallPartialImageEvent {
+  std::string item_id;
+  int output_index = 0;
+  std::string partial_image_b64;
+  int partial_image_index = 0;
+  int sequence_number = 0;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseReasoningSummaryPartAddedEvent {
+  struct Part {
+    std::string text;
+    std::string type;
+  };
+
+  std::string item_id;
+  int output_index = 0;
+  Part part;
+  int sequence_number = 0;
+  int summary_index = 0;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseReasoningSummaryPartDoneEvent {
+  struct Part {
+    std::string text;
+    std::string type;
+  };
+
+  std::string item_id;
+  int output_index = 0;
+  Part part;
+  int sequence_number = 0;
+  int summary_index = 0;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseAudioTranscriptDeltaEvent {
+  std::string delta;
+  int sequence_number = 0;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseAudioTranscriptDoneEvent {
+  int sequence_number = 0;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
+struct ResponseErrorEvent {
+  std::optional<std::string> code;
+  std::string message;
+  std::optional<std::string> param;
+  int sequence_number = 0;
+  std::string type;
+  nlohmann::json raw = nlohmann::json::object();
+};
+
 struct ResponseContentPartAddedEvent {
   int content_index = 0;
   int output_index = 0;
@@ -1007,8 +1117,15 @@ struct ResponseStreamEvent {
     OutputItemDone,
     ContentPartAdded,
     ContentPartDone,
+    OutputTextAnnotationAdded,
     ReasoningTextDelta,
     ReasoningTextDone,
+    ReasoningSummaryPartAdded,
+    ReasoningSummaryPartDone,
+    ImagePartial,
+    AudioTranscriptDelta,
+    AudioTranscriptDone,
+    Error,
     Unknown
   };
 
@@ -1025,8 +1142,15 @@ struct ResponseStreamEvent {
   std::optional<ResponseOutputItemDoneEvent> output_item_done;
   std::optional<ResponseContentPartAddedEvent> content_part_added;
   std::optional<ResponseContentPartDoneEvent> content_part_done;
+  std::optional<ResponseOutputTextAnnotationAddedEvent> annotation_added;
+  std::optional<ResponseReasoningSummaryPartAddedEvent> reasoning_summary_part_added;
+  std::optional<ResponseReasoningSummaryPartDoneEvent> reasoning_summary_part_done;
+  std::optional<ResponseImageGenCallPartialImageEvent> image_partial;
+  std::optional<ResponseAudioTranscriptDeltaEvent> audio_transcript_delta;
+  std::optional<ResponseAudioTranscriptDoneEvent> audio_transcript_done;
   std::optional<ResponseCreatedEvent> created;
   std::optional<ResponseCompletedEvent> completed;
+  std::optional<ResponseErrorEvent> error;
   std::optional<std::string> event_name;
   nlohmann::json raw = nlohmann::json::object();
 };

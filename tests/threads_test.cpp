@@ -42,8 +42,12 @@ TEST(ThreadsResourceTest, CreateSerializesRequest) {
   request.messages.push_back(message);
   request.metadata["project"] = "demo";
   ThreadToolResources resources;
-  resources.code_interpreter_file_ids.push_back("file_1");
-  resources.file_search_vector_store_ids.push_back("vs_1");
+  ThreadToolResources::CodeInterpreter code_interpreter;
+  code_interpreter.file_ids.push_back("file_1");
+  resources.code_interpreter = std::move(code_interpreter);
+  ThreadToolResources::FileSearch file_search;
+  file_search.vector_store_ids.push_back("vs_1");
+  resources.file_search = std::move(file_search);
   request.tool_resources = resources;
 
   auto thread = client.threads().create(request);

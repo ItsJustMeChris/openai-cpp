@@ -11,8 +11,29 @@
 namespace openai {
 
 struct ThreadToolResources {
-  std::vector<std::string> code_interpreter_file_ids;
-  std::vector<std::string> file_search_vector_store_ids;
+  struct CodeInterpreter {
+    std::vector<std::string> file_ids;
+  };
+
+  struct FileSearchVectorStoreChunkingStrategy {
+    std::string type;
+    std::optional<int> chunk_overlap_tokens;
+    std::optional<int> max_chunk_size_tokens;
+  };
+
+  struct FileSearchVectorStore {
+    std::optional<FileSearchVectorStoreChunkingStrategy> chunking_strategy;
+    std::vector<std::string> file_ids;
+    std::optional<std::map<std::string, std::string>> metadata;
+  };
+
+  struct FileSearch {
+    std::vector<std::string> vector_store_ids;
+    std::vector<FileSearchVectorStore> vector_stores;
+  };
+
+  std::optional<CodeInterpreter> code_interpreter;
+  std::optional<FileSearch> file_search;
 };
 
 struct ThreadMessageAttachmentTool {

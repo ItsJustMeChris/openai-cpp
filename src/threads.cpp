@@ -98,13 +98,43 @@ json content_to_json(const std::variant<std::monostate, std::string, std::vector
   return json();
 }
 
+json chunking_strategy_to_json(const ThreadToolResources::FileSearchVectorStoreChunkingStrategy& strategy) {
+  json chunking = json::object();
+  chunking["type"] = strategy.type;
+  if (strategy.chunk_overlap_tokens) chunking["chunk_overlap_tokens"] = *strategy.chunk_overlap_tokens;
+  if (strategy.max_chunk_size_tokens) chunking["max_chunk_size_tokens"] = *strategy.max_chunk_size_tokens;
+  return chunking;
+}
+
+json vector_store_to_json(const ThreadToolResources::FileSearchVectorStore& store) {
+  json value = json::object();
+  if (store.chunking_strategy) {
+    value["chunking_strategy"] = chunking_strategy_to_json(*store.chunking_strategy);
+  }
+  if (!store.file_ids.empty()) value["file_ids"] = store.file_ids;
+  if (store.metadata && !store.metadata->empty()) value["metadata"] = *store.metadata;
+  return value;
+}
+
 json thread_resources_to_json(const ThreadToolResources& resources) {
   json value = json::object();
-  if (!resources.code_interpreter_file_ids.empty()) {
-    value["code_interpreter"] = json::object({{"file_ids", resources.code_interpreter_file_ids}});
+  if (resources.code_interpreter && !resources.code_interpreter->file_ids.empty()) {
+    value["code_interpreter"] = json::object({{"file_ids", resources.code_interpreter->file_ids}});
   }
-  if (!resources.file_search_vector_store_ids.empty()) {
-    value["file_search"] = json::object({{"vector_store_ids", resources.file_search_vector_store_ids}});
+  if (resources.file_search) {
+    json file_search = json::object();
+    if (!resources.file_search->vector_store_ids.empty()) {
+      file_search["vector_store_ids"] = resources.file_search->vector_store_ids;
+    }
+    if (!resources.file_search->vector_stores.empty()) {
+      json stores = json::array();
+      for (const auto& store : resources.file_search->vector_stores) {
+        json store_json = vector_store_to_json(store);
+        if (!store_json.empty()) stores.push_back(std::move(store_json));
+      }
+      if (!stores.empty()) file_search["vector_stores"] = std::move(stores);
+    }
+    if (!file_search.empty()) value["file_search"] = std::move(file_search);
   }
   return value;
 }
@@ -152,22 +182,77 @@ json update_request_to_json(const ThreadUpdateRequest& request) {
   return body;
 }
 
+ThreadToolResources::FileSearchVectorStoreChunkingStrategy parse_chunking_strategy(const json& payload) {
+  ThreadToolResources::FileSearchVectorStoreChunkingStrategy strategy;
+  strategy.type = payload.value("type", "");
+  if (payload.contains("chunk_overlap_tokens") && payload.at("chunk_overlap_tokens").is_number_integer()) {
+    strategy.chunk_overlap_tokens = payload.at("chunk_overlap_tokens").get<int>();
+  }
+  if (payload.contains("max_chunk_size_tokens") && payload.at("max_chunk_size_tokens").is_number_integer()) {
+    strategy.max_chunk_size_tokens = payload.at("max_chunk_size_tokens").get<int>();
+  }
+  if (payload.contains("static") && payload.at("static").is_object()) {
+    const auto& static_obj = payload.at("static");
+    if (static_obj.contains("chunk_overlap_tokens") && static_obj.at("chunk_overlap_tokens").is_number_integer()) {
+      strategy.chunk_overlap_tokens = static_obj.at("chunk_overlap_tokens").get<int>();
+    }
+    if (static_obj.contains("max_chunk_size_tokens") && static_obj.at("max_chunk_size_tokens").is_number_integer()) {
+      strategy.max_chunk_size_tokens = static_obj.at("max_chunk_size_tokens").get<int>();
+    }
+  }
+  return strategy;
+}
+
+std::map<std::string, std::string> parse_metadata_object(const json& payload) {
+  std::map<std::string, std::string> metadata;
+  if (!payload.is_object()) return metadata;
+  for (auto it = payload.begin(); it != payload.end(); ++it) {
+    if (it.value().is_string()) metadata[it.key()] = it.value().get<std::string>();
+  }
+  return metadata;
+}
+
 ThreadToolResources parse_tool_resources(const json& payload) {
   ThreadToolResources resources;
   if (payload.contains("code_interpreter") && payload["code_interpreter"].is_object()) {
+    ThreadToolResources::CodeInterpreter code_interpreter;
     const auto& ci = payload.at("code_interpreter");
     if (ci.contains("file_ids") && ci["file_ids"].is_array()) {
       for (const auto& item : ci.at("file_ids")) {
-        if (item.is_string()) resources.code_interpreter_file_ids.push_back(item.get<std::string>());
+        if (item.is_string()) code_interpreter.file_ids.push_back(item.get<std::string>());
       }
     }
+    if (!code_interpreter.file_ids.empty()) resources.code_interpreter = std::move(code_interpreter);
   }
   if (payload.contains("file_search") && payload["file_search"].is_object()) {
+    ThreadToolResources::FileSearch file_search;
     const auto& fs = payload.at("file_search");
     if (fs.contains("vector_store_ids") && fs["vector_store_ids"].is_array()) {
       for (const auto& item : fs.at("vector_store_ids")) {
-        if (item.is_string()) resources.file_search_vector_store_ids.push_back(item.get<std::string>());
+        if (item.is_string()) file_search.vector_store_ids.push_back(item.get<std::string>());
       }
+    }
+    if (fs.contains("vector_stores") && fs["vector_stores"].is_array()) {
+      for (const auto& store_json : fs.at("vector_stores")) {
+        if (!store_json.is_object()) continue;
+        ThreadToolResources::FileSearchVectorStore store;
+        if (store_json.contains("chunking_strategy") && store_json.at("chunking_strategy").is_object()) {
+          store.chunking_strategy = parse_chunking_strategy(store_json.at("chunking_strategy"));
+        }
+        if (store_json.contains("file_ids") && store_json.at("file_ids").is_array()) {
+          for (const auto& id : store_json.at("file_ids")) {
+            if (id.is_string()) store.file_ids.push_back(id.get<std::string>());
+          }
+        }
+        if (store_json.contains("metadata") && store_json.at("metadata").is_object()) {
+          auto metadata = parse_metadata_object(store_json.at("metadata"));
+          if (!metadata.empty()) store.metadata = std::move(metadata);
+        }
+        file_search.vector_stores.push_back(std::move(store));
+      }
+    }
+    if (!file_search.vector_store_ids.empty() || !file_search.vector_stores.empty()) {
+      resources.file_search = std::move(file_search);
     }
   }
   return resources;
