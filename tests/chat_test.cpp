@@ -134,8 +134,11 @@ TEST(ChatCompletionsResourceTest, CreateSerializesTypedFields) {
   request.tools.push_back(tool);
 
   ChatToolChoice tool_choice;
-  tool_choice.type = "function";
-  tool_choice.function_name = "lookup";
+  tool_choice.type = ChatToolChoice::Type::NamedFunction;
+  ChatCompletionNamedToolChoice named_choice;
+  named_choice.type = "function";
+  named_choice.function.name = "lookup";
+  tool_choice.named_function = named_choice;
   request.tool_choice = tool_choice;
 
   request.parallel_tool_calls = false;
