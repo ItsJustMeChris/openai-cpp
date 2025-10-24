@@ -2,7 +2,7 @@
 
 `openai-cpp` is a modern, fully native C++17 client for the OpenAI API. It mirrors the ergonomics of the official TypeScript SDK (`client.responses().create()`, `client.chat().completions().stream()`, etc.) while taking advantage of strong typing, RAII-friendly resource management, and portable CMake tooling.
 
-> ⚠️ This library is still under active development. API coverage is broad, but expect surface area to evolve while the upstream OpenAI platform continues to ship new capabilities.
+> ℹ️ The latest stable release is `1.0.0` (tag `1.0.0`). The library remains under active development, so expect surface area to evolve as the upstream OpenAI platform ships new capabilities.
 
 ## Highlights
 
@@ -61,13 +61,15 @@ include(FetchContent)
 FetchContent_Declare(
   openai-cpp
   GIT_REPOSITORY https://github.com/ItsJustMeChris/openai-cpp.git
-  GIT_TAG main
+  GIT_TAG 1.0.0
 )
 FetchContent_MakeAvailable(openai-cpp)
 
 add_executable(my_app src/main.cpp)
 target_link_libraries(my_app PRIVATE openai::openai)
 ```
+
+Pinning the `1.0.0` tag keeps your build on the released surface area. Swap to `main` if you need the latest commits before the next release is published.
 
 ### Option 2: Manual clone + add_subdirectory
 
