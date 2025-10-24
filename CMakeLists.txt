@@ -71,6 +71,12 @@ target_link_libraries(openai-cli PRIVATE openai-cpp)
 
 target_include_directories(openai-cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external)
 
+add_executable(openai-chat apps/chat_demo.cpp)
+
+target_link_libraries(openai-chat PRIVATE openai-cpp)
+
+target_include_directories(openai-chat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external)
+
 if (OPENAI_CPP_BUILD_TESTS)
   include(CTest)
   include(FetchContent)
