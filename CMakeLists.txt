@@ -77,6 +77,14 @@ target_link_libraries(openai-chat PRIVATE openai-cpp)
 
 target_include_directories(openai-chat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external)
 
+if (APPLE)
+  enable_language(OBJCXX)
+  add_executable(openai-responses-audio-demo apps/responses_audio_demo.mm)
+  target_link_libraries(openai-responses-audio-demo PRIVATE openai-cpp "-framework Foundation" "-framework AVFoundation")
+  target_include_directories(openai-responses-audio-demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external)
+  target_compile_options(openai-responses-audio-demo PRIVATE "-fobjc-arc")
+endif()
+
 if (OPENAI_CPP_BUILD_TESTS)
   include(CTest)
   include(FetchContent)
