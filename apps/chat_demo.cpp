@@ -92,7 +92,7 @@ int main()
       bool saw_error = false;
       std::optional<openai::Response> completed_response;
 
-      client.responses().create_stream(
+      client.responses().stream(
           request,
           [&](const openai::ResponseStreamEvent& event)
           {

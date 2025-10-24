@@ -1,6 +1,6 @@
 # openai-cpp
 
-`openai-cpp` is a modern, fully native C++17 client for the OpenAI API. It mirrors the ergonomics of the official TypeScript SDK (`client.responses().create()`, `client.chat().completions().create_stream()`, etc.) while taking advantage of strong typing, RAII-friendly resource management, and portable CMake tooling.
+`openai-cpp` is a modern, fully native C++17 client for the OpenAI API. It mirrors the ergonomics of the official TypeScript SDK (`client.responses().create()`, `client.chat().completions().stream()`, etc.) while taking advantage of strong typing, RAII-friendly resource management, and portable CMake tooling.
 
 > ⚠️ This library is still under active development. API coverage is broad, but expect surface area to evolve while the upstream OpenAI platform continues to ship new capabilities.
 
@@ -167,7 +167,7 @@ void stream_story(openai::OpenAIClient& client) {
 
   request.input.push_back(item);
 
-  client.responses().create_stream(
+  client.responses().stream(
       request,
       [&](const openai::ResponseStreamEvent& event) {
         if (event.text_delta && event.text_delta->output_index == 0) {

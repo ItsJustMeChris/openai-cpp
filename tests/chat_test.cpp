@@ -35,7 +35,7 @@ TEST(ChatCompletionsResourceTest, CreateStreamParsesEvents) {
   request.messages.push_back(message);
   request.temperature = 0.2;
 
-  auto events = client.chat().completions().create_stream(request);
+  auto events = client.chat().completions().stream(request);
   ASSERT_EQ(events.size(), 1u);
   EXPECT_TRUE(events[0].event.has_value());
   EXPECT_EQ(*events[0].event, "message");
@@ -76,7 +76,7 @@ TEST(ChatCompletionsResourceTest, CreateStreamInvokesCallbackIncrementally) {
 
   std::vector<std::string> deltas;
 
-  client.chat().completions().create_stream(
+  client.chat().completions().stream(
       request,
       [&](const ServerSentEvent& event) {
         if (event.data.find("content") != std::string::npos) {

@@ -1199,14 +1199,13 @@ public:
   CursorPage<Response> list_page() const;
   CursorPage<Response> list_page(const struct RequestOptions& options) const;
 
-  std::vector<ServerSentEvent> create_stream(const ResponseRequest& request) const;
-  std::vector<ServerSentEvent> create_stream(const ResponseRequest& request,
-                                             const struct RequestOptions& options) const;
-  void create_stream(const ResponseRequest& request,
-                     const std::function<bool(const ResponseStreamEvent&)>& on_event) const;
-  void create_stream(const ResponseRequest& request,
-                     const std::function<bool(const ResponseStreamEvent&)>& on_event,
-                     const struct RequestOptions& options) const;
+  std::vector<ServerSentEvent> stream(const ResponseRequest& request) const;
+  std::vector<ServerSentEvent> stream(const ResponseRequest& request, const struct RequestOptions& options) const;
+  void stream(const ResponseRequest& request,
+              const std::function<bool(const ResponseStreamEvent&)>& on_event) const;
+  void stream(const ResponseRequest& request,
+              const std::function<bool(const ResponseStreamEvent&)>& on_event,
+              const struct RequestOptions& options) const;
 
   std::vector<ServerSentEvent> retrieve_stream(const std::string& response_id) const;
   std::vector<ServerSentEvent> retrieve_stream(const std::string& response_id,

@@ -25,7 +25,9 @@ json state_variables_to_json(const std::optional<std::map<std::string, beta::Cha
   if (!values || values->empty()) return json::object();
 
   json object = json::object();
-  for (const auto& [key, value] : *values) {
+  for (const auto& entry : *values) {
+    const auto& key = entry.first;
+    const auto& value = entry.second;
     std::visit(
         [&](auto&& arg) {
           object[key] = arg;

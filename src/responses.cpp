@@ -2430,8 +2430,8 @@ ResponseList ResponsesResource::list() const {
   return list(RequestOptions{});
 }
 
-std::vector<ServerSentEvent> ResponsesResource::create_stream(const ResponseRequest& request,
-                                                              const RequestOptions& options) const {
+std::vector<ServerSentEvent> ResponsesResource::stream(const ResponseRequest& request,
+                                                       const RequestOptions& options) const {
   SSEEventStream stream;
 
   auto body = build_request_body(request);
@@ -2448,13 +2448,13 @@ std::vector<ServerSentEvent> ResponsesResource::create_stream(const ResponseRequ
   return stream.events();
 }
 
-std::vector<ServerSentEvent> ResponsesResource::create_stream(const ResponseRequest& request) const {
-  return create_stream(request, RequestOptions{});
+std::vector<ServerSentEvent> ResponsesResource::stream(const ResponseRequest& request) const {
+  return stream(request, RequestOptions{});
 }
 
-void ResponsesResource::create_stream(const ResponseRequest& request,
-                                      const std::function<bool(const ResponseStreamEvent&)>& on_event,
-                                      const RequestOptions& options) const {
+void ResponsesResource::stream(const ResponseRequest& request,
+                               const std::function<bool(const ResponseStreamEvent&)>& on_event,
+                               const RequestOptions& options) const {
   SSEEventStream stream([&](const ServerSentEvent& sse_event) {
     if (!on_event) {
       return true;
@@ -2478,9 +2478,9 @@ void ResponsesResource::create_stream(const ResponseRequest& request,
   stream.finalize();
 }
 
-void ResponsesResource::create_stream(const ResponseRequest& request,
-                                      const std::function<bool(const ResponseStreamEvent&)>& on_event) const {
-  create_stream(request, on_event, RequestOptions{});
+void ResponsesResource::stream(const ResponseRequest& request,
+                               const std::function<bool(const ResponseStreamEvent&)>& on_event) const {
+  stream(request, on_event, RequestOptions{});
 }
 
 std::vector<ServerSentEvent> ResponsesResource::retrieve_stream(const std::string& response_id,

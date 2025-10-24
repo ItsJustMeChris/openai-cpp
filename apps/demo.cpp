@@ -65,7 +65,7 @@ int main()
     std::size_t chunk_index = 0;
     auto start = std::chrono::steady_clock::now();
 
-    client.responses().create_stream(
+    client.responses().stream(
         stream_request,
         [&](const openai::ResponseStreamEvent &event)
         {

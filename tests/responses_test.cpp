@@ -384,7 +384,7 @@ TEST(ResponsesResourceTest, CreateStreamParsesEvents) {
   input.message.content.push_back(std::move(content));
   request.input.push_back(std::move(input));
 
-  auto events = client.responses().create_stream(request);
+  auto events = client.responses().stream(request);
   ASSERT_EQ(events.size(), 1u);
   EXPECT_NE(events[0].data.find("Hello"), std::string::npos);
   ASSERT_TRUE(mock_ptr->last_request().has_value());
@@ -436,7 +436,7 @@ data: [DONE]
   request.input.push_back(std::move(input));
 
   std::size_t event_count = 0;
-  client.responses().create_stream(
+  client.responses().stream(
       request,
       [&](const openai::ResponseStreamEvent& event) {
         ++event_count;
@@ -500,7 +500,7 @@ data: [DONE]
 
   std::size_t reasoning_events = 0;
   std::string final_text;
-  client.responses().create_stream(
+  client.responses().stream(
       request,
       [&](const openai::ResponseStreamEvent& event) {
         if (event.reasoning_text_delta) {

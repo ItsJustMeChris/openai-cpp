@@ -170,7 +170,7 @@ TEST(RunsResourceTest, CreateStreamCollectsEvents) {
   RunCreateRequest request;
   request.assistant_id = "asst_1";
 
-  auto events = client.runs().create_stream("thread_1", request);
+  auto events = client.runs().stream("thread_1", request);
   ASSERT_EQ(events.size(), 6u);
   EXPECT_TRUE(std::holds_alternative<AssistantThreadEvent>(events[0]));
   EXPECT_TRUE(std::holds_alternative<AssistantRunEvent>(events[1]));
@@ -207,7 +207,7 @@ TEST(RunsResourceTest, CreateStreamSupportsCallback) {
   std::size_t event_count = 0;
   bool saw_completed = false;
 
-  client.runs().create_stream(
+  client.runs().stream(
       "thread_1",
       request,
       [&](const AssistantStreamEvent& event) {

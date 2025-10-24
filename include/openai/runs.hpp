@@ -271,18 +271,6 @@ public:
                           const RunSubmitToolOutputsRequest& request,
                           const RequestOptions& options) const;
 
-  std::vector<AssistantStreamEvent> create_stream(const std::string& thread_id, const RunCreateRequest& request) const;
-  std::vector<AssistantStreamEvent> create_stream(const std::string& thread_id,
-                                                  const RunCreateRequest& request,
-                                                  const RequestOptions& options) const;
-  void create_stream(const std::string& thread_id,
-                     const RunCreateRequest& request,
-                     const std::function<bool(const AssistantStreamEvent&)>& on_event) const;
-  void create_stream(const std::string& thread_id,
-                     const RunCreateRequest& request,
-                     const std::function<bool(const AssistantStreamEvent&)>& on_event,
-                     const RequestOptions& options) const;
-
   AssistantStreamSnapshot create_stream_snapshot(const std::string& thread_id, const RunCreateRequest& request) const;
   AssistantStreamSnapshot create_stream_snapshot(const std::string& thread_id,
                                                  const RunCreateRequest& request,

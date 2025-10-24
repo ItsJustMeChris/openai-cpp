@@ -544,16 +544,16 @@ Run RunsResource::submit_tool_outputs(const std::string& run_id,
   return submit_tool_outputs(request.thread_id, run_id, request, options);
 }
 
-std::vector<AssistantStreamEvent> RunsResource::create_stream(const std::string& thread_id,
-                                                              const RunCreateRequest& request) const {
-  return create_stream(thread_id, request, RequestOptions{});
+std::vector<AssistantStreamEvent> RunsResource::stream(const std::string& thread_id,
+                                                       const RunCreateRequest& request) const {
+  return stream(thread_id, request, RequestOptions{});
 }
 
-std::vector<AssistantStreamEvent> RunsResource::create_stream(const std::string& thread_id,
-                                                              const RunCreateRequest& request,
-                                                              const RequestOptions& options) const {
+std::vector<AssistantStreamEvent> RunsResource::stream(const std::string& thread_id,
+                                                       const RunCreateRequest& request,
+                                                       const RequestOptions& options) const {
   std::vector<AssistantStreamEvent> events;
-  create_stream(
+  stream(
       thread_id,
       request,
       [&](const AssistantStreamEvent& event) {
@@ -564,16 +564,16 @@ std::vector<AssistantStreamEvent> RunsResource::create_stream(const std::string&
   return events;
 }
 
-void RunsResource::create_stream(const std::string& thread_id,
-                                 const RunCreateRequest& request,
-                                 const std::function<bool(const AssistantStreamEvent&)>& on_event) const {
-  create_stream(thread_id, request, on_event, RequestOptions{});
+void RunsResource::stream(const std::string& thread_id,
+                          const RunCreateRequest& request,
+                          const std::function<bool(const AssistantStreamEvent&)>& on_event) const {
+  stream(thread_id, request, on_event, RequestOptions{});
 }
 
-void RunsResource::create_stream(const std::string& thread_id,
-                                 const RunCreateRequest& request,
-                                 const std::function<bool(const AssistantStreamEvent&)>& on_event,
-                                 const RequestOptions& options) const {
+void RunsResource::stream(const std::string& thread_id,
+                          const RunCreateRequest& request,
+                          const std::function<bool(const AssistantStreamEvent&)>& on_event,
+                          const RequestOptions& options) const {
   RequestOptions request_options = options;
   apply_beta_header(request_options);
   request_options.collect_body = false;
@@ -653,30 +653,6 @@ AssistantStreamSnapshot RunsResource::create_stream_snapshot(const std::string& 
   stream.finalize();
 
   return snapshot;
-}
-
-std::vector<AssistantStreamEvent> RunsResource::stream(const std::string& thread_id,
-                                                       const RunCreateRequest& request) const {
-  return stream(thread_id, request, RequestOptions{});
-}
-
-std::vector<AssistantStreamEvent> RunsResource::stream(const std::string& thread_id,
-                                                       const RunCreateRequest& request,
-                                                       const RequestOptions& options) const {
-  return create_stream(thread_id, request, options);
-}
-
-void RunsResource::stream(const std::string& thread_id,
-                          const RunCreateRequest& request,
-                          const std::function<bool(const AssistantStreamEvent&)>& on_event) const {
-  create_stream(thread_id, request, on_event);
-}
-
-void RunsResource::stream(const std::string& thread_id,
-                          const RunCreateRequest& request,
-                          const std::function<bool(const AssistantStreamEvent&)>& on_event,
-                          const RequestOptions& options) const {
-  create_stream(thread_id, request, on_event, options);
 }
 
 std::vector<AssistantStreamEvent> RunsResource::submit_tool_outputs_stream(

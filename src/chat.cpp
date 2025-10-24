@@ -871,9 +871,9 @@ ChatCompletion ChatCompletionsResource::create(const ChatCompletionRequest& requ
   }
 }
 
-void ChatCompletionsResource::create_stream(const ChatCompletionRequest& request,
-                                            const std::function<bool(const ServerSentEvent&)>& on_event,
-                                            const RequestOptions& options) const {
+void ChatCompletionsResource::stream(const ChatCompletionRequest& request,
+                                     const std::function<bool(const ServerSentEvent&)>& on_event,
+                                     const RequestOptions& options) const {
   json body = build_chat_request_body(request, true);
 
   RequestOptions request_options = options;
@@ -895,19 +895,19 @@ void ChatCompletionsResource::create_stream(const ChatCompletionRequest& request
   stream.finalize();
 }
 
-std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCompletionRequest& request) const {
-  return create_stream(request, RequestOptions{});
+std::vector<ServerSentEvent> ChatCompletionsResource::stream(const ChatCompletionRequest& request) const {
+  return stream(request, RequestOptions{});
 }
 
-void ChatCompletionsResource::create_stream(const ChatCompletionRequest& request,
-                                            const std::function<bool(const ServerSentEvent&)>& on_event) const {
-  create_stream(request, on_event, RequestOptions{});
+void ChatCompletionsResource::stream(const ChatCompletionRequest& request,
+                                     const std::function<bool(const ServerSentEvent&)>& on_event) const {
+  stream(request, on_event, RequestOptions{});
 }
 
-std::vector<ServerSentEvent> ChatCompletionsResource::create_stream(const ChatCompletionRequest& request,
-                                                                    const RequestOptions& options) const {
+std::vector<ServerSentEvent> ChatCompletionsResource::stream(const ChatCompletionRequest& request,
+                                                             const RequestOptions& options) const {
   std::vector<ServerSentEvent> events;
-  create_stream(
+  stream(
       request,
       [&](const ServerSentEvent& event) {
         events.push_back(event);

@@ -501,14 +501,14 @@ public:
   ChatCompletion create(const ChatCompletionRequest& request,
                         const struct RequestOptions& options) const;
 
-  std::vector<ServerSentEvent> create_stream(const ChatCompletionRequest& request) const;
-  std::vector<ServerSentEvent> create_stream(const ChatCompletionRequest& request,
-                                             const struct RequestOptions& options) const;
-  void create_stream(const ChatCompletionRequest& request,
-                     const std::function<bool(const ServerSentEvent&)>& on_event) const;
-  void create_stream(const ChatCompletionRequest& request,
-                     const std::function<bool(const ServerSentEvent&)>& on_event,
-                     const struct RequestOptions& options) const;
+  std::vector<ServerSentEvent> stream(const ChatCompletionRequest& request) const;
+  std::vector<ServerSentEvent> stream(const ChatCompletionRequest& request,
+                                      const struct RequestOptions& options) const;
+  void stream(const ChatCompletionRequest& request,
+              const std::function<bool(const ServerSentEvent&)>& on_event) const;
+  void stream(const ChatCompletionRequest& request,
+              const std::function<bool(const ServerSentEvent&)>& on_event,
+              const struct RequestOptions& options) const;
 
   ChatCompletion retrieve(const std::string& completion_id) const;
   ChatCompletion retrieve(const std::string& completion_id, const struct RequestOptions& options) const;
